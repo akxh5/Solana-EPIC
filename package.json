@@ -1,0 +1,23 @@
+{
+  "name": "epic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EPIC CLI foundation for analyzing Anchor projects.",
+  "scripts": {
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "test": "turbo run test",
+    "dev": "turbo run dev"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.8.2"
+}
