@@ -3,3 +3,4 @@ dist
 .turbo
 *.tsbuildinfo
 .DS_Store
+test-repos/\n.agents/\n*.jsonl\nsession.txt
