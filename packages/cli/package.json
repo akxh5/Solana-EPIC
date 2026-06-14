@@ -1,6 +1,6 @@
 {
   "name": "@epic/cli",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -14,7 +14,7 @@
     "dev": "tsx src/index.ts"
   },
   "dependencies": {
-    "@epic/parser": "0.1.0",
+    "@epic/parser": "0.4.0",
     "commander": "^14.0.0"
   },
   "devDependencies": {
