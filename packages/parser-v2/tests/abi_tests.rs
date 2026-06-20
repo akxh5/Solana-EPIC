@@ -1,11 +1,15 @@
-use parser_v2::{Workspace, abi::AbiEngine};
+use parser_v2::{abi::AbiEngine, Workspace};
 
 fn get_fingerprint(source: &str, struct_name: &str) -> String {
     let mut workspace = Workspace::new();
-    workspace.add_file("program", &["test_mod"], source).unwrap();
-    
+    workspace
+        .add_file("program", &["test_mod"], source)
+        .unwrap();
+
     let mut abi_engine = AbiEngine::new(&workspace.registry);
-    abi_engine.hash_of_absolute_path(&format!("program::test_mod::{}", struct_name)).unwrap()
+    abi_engine
+        .hash_of_absolute_path(&format!("program::test_mod::{}", struct_name))
+        .unwrap()
 }
 
 #[test]
@@ -120,7 +124,10 @@ fn test_nested_struct_changes_fingerprint() {
 
     let hash1 = get_fingerprint(source1, "MyAccount");
     let hash2 = get_fingerprint(source2, "MyAccount");
-    assert_ne!(hash1, hash2, "Nested struct change should cascade to parent fingerprint");
+    assert_ne!(
+        hash1, hash2,
+        "Nested struct change should cascade to parent fingerprint"
+    );
 }
 
 #[test]
@@ -150,7 +157,10 @@ fn test_enum_changes_fingerprint() {
 
     let hash1 = get_fingerprint(source1, "MyAccount");
     let hash2 = get_fingerprint(source2, "MyAccount");
-    assert_ne!(hash1, hash2, "Enum change should cascade to parent fingerprint");
+    assert_ne!(
+        hash1, hash2,
+        "Enum change should cascade to parent fingerprint"
+    );
 }
 
 #[test]
@@ -173,5 +183,8 @@ fn test_alias_target_changes_fingerprint() {
 
     let hash1 = get_fingerprint(source1, "MyAccount");
     let hash2 = get_fingerprint(source2, "MyAccount");
-    assert_ne!(hash1, hash2, "Alias target change should cascade to parent fingerprint");
+    assert_ne!(
+        hash1, hash2,
+        "Alias target change should cascade to parent fingerprint"
+    );
 }

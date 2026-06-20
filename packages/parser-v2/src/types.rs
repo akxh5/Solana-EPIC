@@ -6,6 +6,7 @@ pub enum TypeDef {
     Struct(StructDef),
     Enum(EnumDef),
     Alias(AliasDef),
+    Instruction(InstructionDef),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -13,12 +14,14 @@ pub struct StructDef {
     pub name: String,
     pub is_account: bool,
     pub fields: Vec<FieldDef>,
+    pub attrs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FieldDef {
     pub name: String,
     pub type_ref: TypeRef,
+    pub attrs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,7 +38,7 @@ pub enum TypeRef {
     Tuple(Vec<TypeRef>),
     String,
     Pubkey,
-    Custom(String), // The raw string parsed
+    Custom(String),   // The raw string parsed
     Resolved(String), // The absolute path after resolution
 }
 
@@ -57,6 +60,12 @@ pub struct AliasDef {
     pub target: TypeRef,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InstructionDef {
+    pub name: String,
+    pub args: Vec<FieldDef>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TypeRegistry {
     // absolute_path -> TypeDef
@@ -71,7 +80,7 @@ impl TypeRegistry {
     pub fn insert(&mut self, absolute_path: String, def: TypeDef) {
         self.definitions.insert(absolute_path, def);
     }
-    
+
     pub fn get(&self, absolute_path: &str) -> Option<&TypeDef> {
         self.definitions.get(absolute_path)
     }

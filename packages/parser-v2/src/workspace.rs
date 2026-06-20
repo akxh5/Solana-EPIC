@@ -1,6 +1,9 @@
+use crate::types::{
+    AliasDef, EnumDef, FieldDef, InstructionDef, StructDef, TypeDef, TypeRef, TypeRegistry,
+    VariantDef,
+};
 use serde::{Deserialize, Serialize};
 use syn::{visit::Visit, ItemEnum, ItemStruct, ItemType};
-use crate::types::{AliasDef, EnumDef, FieldDef, StructDef, TypeDef, TypeRef, VariantDef, TypeRegistry};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Workspace {
@@ -22,11 +25,25 @@ impl<'a, 'ast> Visit<'ast> for FileVisitor<'a> {
             for field in &named.named {
                 if let Some(ident) = &field.ident {
                     let type_ref = parse_type(&field.ty);
+                    let mut attrs = Vec::new();
+                    for attr in &field.attrs {
+                        if !attr.path().is_ident("doc") {
+                            attrs.push(quote::quote!(#attr).to_string().replace(" ", ""));
+                        }
+                    }
                     fields.push(FieldDef {
                         name: ident.to_string(),
                         type_ref,
+                        attrs,
                     });
                 }
+            }
+        }
+
+        let mut struct_attrs = Vec::new();
+        for attr in &i.attrs {
+            if !attr.path().is_ident("doc") {
+                struct_attrs.push(quote::quote!(#attr).to_string().replace(" ", ""));
             }
         }
 
@@ -34,6 +51,7 @@ impl<'a, 'ast> Visit<'ast> for FileVisitor<'a> {
             name: name.clone(),
             is_account,
             fields,
+            attrs: struct_attrs,
         });
 
         let mut path = self.current_module_path.clone();
@@ -51,9 +69,16 @@ impl<'a, 'ast> Visit<'ast> for FileVisitor<'a> {
                 for field in &named.named {
                     if let Some(ident) = &field.ident {
                         let type_ref = parse_type(&field.ty);
+                        let mut attrs = Vec::new();
+                        for attr in &field.attrs {
+                            if !attr.path().is_ident("doc") {
+                                attrs.push(quote::quote!(#attr).to_string().replace(" ", ""));
+                            }
+                        }
                         fields.push(FieldDef {
                             name: ident.to_string(),
                             type_ref,
+                            attrs,
                         });
                     }
                 }
@@ -89,6 +114,43 @@ impl<'a, 'ast> Visit<'ast> for FileVisitor<'a> {
     }
 
     fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
+        let is_program = i.attrs.iter().any(|attr| attr.path().is_ident("program"));
+
+        if is_program {
+            if let Some((_, items)) = &i.content {
+                for item in items {
+                    if let syn::Item::Fn(item_fn) = item {
+                        let name = item_fn.sig.ident.to_string();
+                        let mut args = Vec::new();
+
+                        for input in &item_fn.sig.inputs {
+                            if let syn::FnArg::Typed(pat_type) = input {
+                                if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                                    let arg_name = pat_ident.ident.to_string();
+                                    let type_ref = parse_type(&pat_type.ty);
+                                    args.push(FieldDef {
+                                        name: arg_name,
+                                        type_ref,
+                                        attrs: vec![],
+                                    });
+                                }
+                            }
+                        }
+
+                        let def = TypeDef::Instruction(InstructionDef {
+                            name: name.clone(),
+                            args,
+                        });
+
+                        let mut path = self.current_module_path.clone();
+                        path.push(i.ident.to_string());
+                        path.push(name);
+                        self.registry.insert(path.join("::"), def);
+                    }
+                }
+            }
+        }
+
         self.current_module_path.push(i.ident.to_string());
         syn::visit::visit_item_mod(self, i);
         self.current_module_path.pop();
@@ -100,11 +162,10 @@ pub fn parse_type(ty: &syn::Type) -> TypeRef {
         syn::Type::Path(type_path) => {
             let segment = type_path.path.segments.last().unwrap();
             let ident = segment.ident.to_string();
-            
+
             match ident.as_str() {
-                "u8" | "u16" | "u32" | "u64" | "u128" |
-                "i8" | "i16" | "i32" | "i64" | "i128" |
-                "f32" | "f64" | "bool" => TypeRef::Primitive(ident),
+                "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
+                | "f32" | "f64" | "bool" => TypeRef::Primitive(ident),
                 "String" => TypeRef::String,
                 "Pubkey" => TypeRef::Pubkey,
                 "Vec" => {
@@ -114,7 +175,7 @@ pub fn parse_type(ty: &syn::Type) -> TypeRef {
                         }
                     }
                     TypeRef::Custom(ident)
-                },
+                }
                 "Option" => {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
@@ -122,10 +183,10 @@ pub fn parse_type(ty: &syn::Type) -> TypeRef {
                         }
                     }
                     TypeRef::Custom(ident)
-                },
+                }
                 _ => TypeRef::Custom(ident),
             }
-        },
+        }
         syn::Type::Array(type_array) => {
             let inner = parse_type(&type_array.elem);
             let len = match &type_array.len {
@@ -135,11 +196,11 @@ pub fn parse_type(ty: &syn::Type) -> TypeRef {
                     } else {
                         0
                     }
-                },
+                }
                 _ => 0, // In a real parser we need to resolve constants
             };
             TypeRef::Array(Box::new(inner), len)
-        },
+        }
         _ => TypeRef::Custom(quote::quote!(#ty).to_string().replace(" ", "")),
     }
 }
@@ -149,7 +210,12 @@ impl Workspace {
         Self::default()
     }
 
-    pub fn add_file(&mut self, program_name: &str, module_path: &[&str], source: &str) -> anyhow::Result<()> {
+    pub fn add_file(
+        &mut self,
+        program_name: &str,
+        module_path: &[&str],
+        source: &str,
+    ) -> anyhow::Result<()> {
         let file = syn::parse_str::<syn::File>(source)?;
         let mut full_path = vec![program_name.to_string()];
         for m in module_path {

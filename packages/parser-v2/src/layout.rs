@@ -1,4 +1,4 @@
-use crate::types::{StructDef, TypeDef, TypeRef, TypeRegistry, EnumDef};
+use crate::types::{EnumDef, StructDef, TypeDef, TypeRef, TypeRegistry};
 use anyhow::{anyhow, bail, Result};
 use std::collections::HashMap;
 
@@ -57,10 +57,22 @@ impl<'a> LayoutEngine<'a> {
                     "u128" | "i128" => 16,
                     _ => bail!("Unknown primitive: {}", p),
                 };
-                Ok(LayoutInfo { size, dynamic: false, dependencies: vec![] })
+                Ok(LayoutInfo {
+                    size,
+                    dynamic: false,
+                    dependencies: vec![],
+                })
             }
-            TypeRef::String => Ok(LayoutInfo { size: 4, dynamic: true, dependencies: vec![] }),
-            TypeRef::Pubkey => Ok(LayoutInfo { size: 32, dynamic: false, dependencies: vec![] }),
+            TypeRef::String => Ok(LayoutInfo {
+                size: 4,
+                dynamic: true,
+                dependencies: vec![],
+            }),
+            TypeRef::Pubkey => Ok(LayoutInfo {
+                size: 32,
+                dynamic: false,
+                dependencies: vec![],
+            }),
             TypeRef::Array(inner, len) => {
                 let inner_layout = self.size_of_type_ref(current_module, inner)?;
                 Ok(LayoutInfo {
@@ -84,9 +96,7 @@ impl<'a> LayoutEngine<'a> {
                 let abs_path = self.resolve_absolute_path(current_module, ident)?;
                 self.size_of_absolute_path(&abs_path)
             }
-            TypeRef::Resolved(abs_path) => {
-                self.size_of_absolute_path(abs_path)
-            }
+            TypeRef::Resolved(abs_path) => self.size_of_absolute_path(abs_path),
             _ => bail!("Unsupported type ref: {:?}", ty),
         }
     }
@@ -102,7 +112,11 @@ impl<'a> LayoutEngine<'a> {
 
         self.resolving.push(abs_path.to_string());
 
-        let def = self.registry.get(abs_path).ok_or_else(|| anyhow!("Definition missing for {}", abs_path))?.clone();
+        let def = self
+            .registry
+            .get(abs_path)
+            .ok_or_else(|| anyhow!("Definition missing for {}", abs_path))?
+            .clone();
 
         let current_module = if let Some(idx) = abs_path.rfind("::") {
             &abs_path[..idx]
@@ -114,12 +128,17 @@ impl<'a> LayoutEngine<'a> {
             TypeDef::Struct(s) => self.size_of_struct(current_module, &s)?,
             TypeDef::Enum(e) => self.size_of_enum(current_module, &e)?,
             TypeDef::Alias(a) => self.size_of_type_ref(current_module, &a.target)?,
+            TypeDef::Instruction(_) => bail!(
+                "Cannot calculate layout size of an instruction: {}",
+                abs_path
+            ),
         };
 
         layout.dependencies.push(abs_path.to_string());
 
         self.resolving.pop();
-        self.layout_cache.insert(abs_path.to_string(), layout.clone());
+        self.layout_cache
+            .insert(abs_path.to_string(), layout.clone());
 
         Ok(layout)
     }

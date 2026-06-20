@@ -24,7 +24,7 @@ pub struct EpicReport {
 pub fn generate_report(registry: &TypeRegistry) -> anyhow::Result<EpicReport> {
     let mut layout_engine = LayoutEngine::new(registry);
     let mut abi_engine = AbiEngine::new(registry);
-    
+
     let mut reports = Vec::new();
     let mut structs_found = 0;
     let mut enums_found = 0;
@@ -37,7 +37,7 @@ pub fn generate_report(registry: &TypeRegistry) -> anyhow::Result<EpicReport> {
                 if s.is_account {
                     let layout = layout_engine.size_of_absolute_path(abs_path)?;
                     let fingerprint = abi_engine.hash_of_absolute_path(abs_path)?;
-                    
+
                     let namespace = if let Some(idx) = abs_path.rfind("::") {
                         abs_path[..idx].to_string()
                     } else {
@@ -56,10 +56,11 @@ pub fn generate_report(registry: &TypeRegistry) -> anyhow::Result<EpicReport> {
             }
             TypeDef::Enum(_) => enums_found += 1,
             TypeDef::Alias(_) => aliases_found += 1,
+            TypeDef::Instruction(_) => {} // Ignore for account report
         }
     }
 
-    Ok(EpicReport { 
+    Ok(EpicReport {
         accounts: reports,
         structs_found,
         enums_found,
