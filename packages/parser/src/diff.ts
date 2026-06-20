@@ -17,11 +17,12 @@ const RISK_ORDER: RiskLevel[] = ["None", "Low", "Medium", "High", "Critical"];
 
 export async function compareAnchorProjects(
   oldProjectPath: string,
-  newProjectPath: string
+  newProjectPath: string,
+  excludePaths?: string[]
 ): Promise<UpgradeReadinessReport> {
   const [oldProject, newProject] = await Promise.all([
-    analyzeAnchorProject(oldProjectPath),
-    analyzeAnchorProject(newProjectPath)
+    analyzeAnchorProject(oldProjectPath, excludePaths),
+    analyzeAnchorProject(newProjectPath, excludePaths)
   ]);
 
   return buildUpgradeReadinessReport(oldProject, newProject);

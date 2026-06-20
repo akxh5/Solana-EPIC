@@ -23,7 +23,69 @@ export class AnalysisError extends Error {
   }
 }
 
-export function parseAccountStructs(source: string, filePath: string): AccountStruct[] {
+export type RawStruct = {
+  name: string;
+  fields: Array<{ name: string; type: string }>;
+  filePath: string;
+};
+
+export function parseAllRawStructs(source: string, filePath: string): RawStruct[] {
+  const cleanSource = stripRustComments(source);
+  const rawStructs: RawStruct[] = [];
+  const structMatch = /\bstruct\s+([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  
+  let match;
+  while ((match = structMatch.exec(cleanSource)) !== null) {
+    const structStart = match.index;
+    const bodyStart = cleanSource.indexOf("{", structStart);
+    if (bodyStart === -1) {
+      continue;
+    }
+
+    const textBetween = cleanSource.slice(structStart, bodyStart);
+    if (textBetween.includes(";") || /\bstruct\b/.test(textBetween.slice(match[0].length))) {
+      structMatch.lastIndex = structStart + match[0].length;
+      continue;
+    }
+
+    const bodyEnd = findMatchingBrace(cleanSource, bodyStart);
+    if (bodyEnd === -1) {
+      continue;
+    }
+
+    const body = cleanSource.slice(bodyStart + 1, bodyEnd);
+    const fields: Array<{ name: string; type: string }> = [];
+
+    for (const fieldSource of splitTopLevel(body, ",")) {
+      const cleanFieldText = stripMacroAttributes(fieldSource).cleanText.trim();
+      if (!cleanFieldText) {
+        continue;
+      }
+
+      const fieldMatch = /^(?:pub(?:\([^)]+\))?\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/.exec(cleanFieldText);
+      if (fieldMatch) {
+        fields.push({
+          name: fieldMatch[1],
+          type: normalizeRustType(fieldMatch[2])
+        });
+      }
+    }
+
+    rawStructs.push({
+      name: match[1],
+      fields,
+      filePath
+    });
+  }
+
+  return rawStructs;
+}
+
+export function parseAccountStructs(
+  source: string,
+  filePath: string,
+  typesRegistry?: Map<string, RawStruct>
+): AccountStruct[] {
   const cleanSource = stripRustComments(source);
   const accountStructs: AccountStruct[] = [];
   let searchIndex = 0;
@@ -42,7 +104,7 @@ export function parseAccountStructs(source: string, filePath: string): AccountSt
       continue;
     }
 
-    const fields = parseNamedFields(structBlock.body, structBlock.name, filePath);
+    const fields = parseNamedFields(structBlock.body, structBlock.name, filePath, typesRegistry);
     const fieldBytes = fields.reduce((sum, field) => sum + field.byteSize, 0);
     const layoutWarnings = fields
       .filter((field) => field.dynamic)
@@ -75,26 +137,38 @@ export function parseAccountStructs(source: string, filePath: string): AccountSt
 }
 
 function findNextStructBlock(source: string, fromIndex: number): StructBlock | null {
-  const structMatch = /\b(?:pub\s+)?struct\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/g;
+  const structMatch = /\bstruct\s+([A-Za-z_][A-Za-z0-9_]*)\b/g;
   structMatch.lastIndex = fromIndex;
-  const match = structMatch.exec(source);
+  
+  while (true) {
+    const match = structMatch.exec(source);
+    if (!match || match.index === undefined) {
+      return null;
+    }
 
-  if (!match || match.index === undefined) {
-    return null;
+    const structStart = match.index;
+    const bodyStart = source.indexOf("{", structStart);
+    if (bodyStart === -1) {
+      return null;
+    }
+
+    const textBetween = source.slice(structStart, bodyStart);
+    if (textBetween.includes(";") || /\bstruct\b/.test(textBetween.slice(match[0].length))) {
+      structMatch.lastIndex = structStart + match[0].length;
+      continue;
+    }
+
+    const bodyEnd = findMatchingBrace(source, bodyStart);
+    if (bodyEnd === -1) {
+      return null;
+    }
+
+    return {
+      name: match[1],
+      body: source.slice(bodyStart + 1, bodyEnd),
+      endIndex: bodyEnd
+    };
   }
-
-  const bodyStart = source.indexOf("{", match.index);
-  const bodyEnd = findMatchingBrace(source, bodyStart);
-
-  if (bodyStart === -1 || bodyEnd === -1) {
-    return null;
-  }
-
-  return {
-    name: match[1],
-    body: source.slice(bodyStart + 1, bodyEnd),
-    endIndex: bodyEnd
-  };
 }
 
 function findMatchingBrace(source: string, openBraceIndex: number): number {
@@ -117,28 +191,73 @@ function findMatchingBrace(source: string, openBraceIndex: number): number {
   return -1;
 }
 
-function parseNamedFields(body: string, accountName: string, filePath: string): AccountField[] {
+function stripMacroAttributes(text: string): { cleanText: string; warnings: string[] } {
+  let output = "";
+  let index = 0;
+  const warnings: string[] = [];
+
+  while (index < text.length) {
+    if (text[index] === "#" && text[index + 1] === "[") {
+      const macroStart = index;
+      index += 2;
+      let depth = 1;
+      let closed = false;
+
+      while (index < text.length) {
+        const char = text[index];
+        if (char === "[") {
+          depth += 1;
+        } else if (char === "]") {
+          depth -= 1;
+          if (depth === 0) {
+            closed = true;
+            index += 1;
+            break;
+          }
+        }
+        index += 1;
+      }
+
+      if (!closed) {
+        warnings.push(`Unclosed macro attribute starting at index ${macroStart}`);
+      }
+      continue;
+    }
+
+    output += text[index];
+    index += 1;
+  }
+
+  return { cleanText: output, warnings };
+}
+
+function parseNamedFields(
+  body: string,
+  accountName: string,
+  filePath: string,
+  typesRegistry?: Map<string, RawStruct>
+): AccountField[] {
   const fields: AccountField[] = [];
 
   for (const fieldSource of splitTopLevel(body, ",")) {
-    const withoutAttributes = fieldSource
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("#["))
-      .join("\n")
-      .trim();
+    const { cleanText, warnings } = stripMacroAttributes(fieldSource);
+    if (warnings.length > 0) {
+      console.warn(`⚠️ Parser warnings in ${filePath} (account ${accountName}):\n` + warnings.join("\n"));
+    }
 
-    if (!withoutAttributes) {
+    const cleanFieldText = cleanText.trim();
+    if (!cleanFieldText) {
       continue;
     }
 
-    const fieldMatch = /^(?:pub(?:\([^)]+\))?\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/.exec(withoutAttributes);
+    const fieldMatch = /^(?:pub(?:\([^)]+\))?\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/.exec(cleanFieldText);
 
     if (!fieldMatch) {
-      continue;
+      throw new Error(`EPIC Parser: Unable to parse field definition "${cleanFieldText}" in account struct "${accountName}" at ${filePath}.`);
     }
 
     const type = normalizeRustType(fieldMatch[2]);
-    const sized = sizeOfRustType(type);
+    const sized = sizeOfRustType(type, typesRegistry);
 
     if (sized.byteSize === null) {
       throw new AnalysisError(

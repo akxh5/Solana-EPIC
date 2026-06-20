@@ -22,7 +22,11 @@ const PRIMITIVE_SIZES = new Map<string, number>([
   ["publicKey", 32]
 ]);
 
-export function sizeOfRustType(type: string): SizedType {
+export function sizeOfRustType(
+  type: string,
+  typesRegistry?: Map<string, any>,
+  resolving: Set<string> = new Set()
+): SizedType {
   const normalizedType = unwrapWhitespace(type);
   const primitiveSize = PRIMITIVE_SIZES.get(normalizedType);
 
@@ -30,10 +34,15 @@ export function sizeOfRustType(type: string): SizedType {
     return { byteSize: primitiveSize, dynamic: false };
   }
 
+  // Handle custom types from the registry
+  if (typesRegistry && typesRegistry.has(normalizedType)) {
+    return resolveStructSize(normalizedType, typesRegistry, resolving);
+  }
+
   const array = parseArrayType(normalizedType);
 
   if (array) {
-    const inner = sizeOfRustType(array.innerType);
+    const inner = sizeOfRustType(array.innerType, typesRegistry, resolving);
     return inner.byteSize === null
       ? { byteSize: null, dynamic: inner.dynamic, note: `unsupported array element type: ${array.innerType}` }
       : {
@@ -46,7 +55,7 @@ export function sizeOfRustType(type: string): SizedType {
   const optionInner = parseGenericType(normalizedType, "Option");
 
   if (optionInner) {
-    const inner = sizeOfRustType(optionInner);
+    const inner = sizeOfRustType(optionInner, typesRegistry, resolving);
     return inner.byteSize === null
       ? { byteSize: null, dynamic: inner.dynamic, note: `unsupported Option inner type: ${optionInner}` }
       : {
@@ -91,6 +100,48 @@ export function sizeOfRustType(type: string): SizedType {
   }
 
   return { byteSize: null, dynamic: false, note: `unsupported fixed size type: ${normalizedType}` };
+}
+
+function resolveStructSize(
+  typeName: string,
+  typesRegistry: Map<string, any>,
+  resolving: Set<string>
+): SizedType {
+  if (resolving.has(typeName)) {
+    return { byteSize: null, dynamic: true, note: `circular dependency detected: ${typeName}` };
+  }
+
+  const structDef = typesRegistry.get(typeName);
+  if (!structDef) {
+    return { byteSize: null, dynamic: false, note: `type definition not found: ${typeName}` };
+  }
+
+  resolving.add(typeName);
+  let totalSize = 0;
+  let dynamic = false;
+  const notes: string[] = [];
+
+  for (const field of structDef.fields) {
+    const res = sizeOfRustType(field.type, typesRegistry, resolving);
+    if (res.byteSize === null) {
+      resolving.delete(typeName);
+      return { byteSize: null, dynamic: false, note: `unresolved nested type "${field.type}" in "${typeName}"` };
+    }
+    totalSize += res.byteSize;
+    if (res.dynamic) {
+      dynamic = true;
+    }
+    if (res.note) {
+      notes.push(res.note);
+    }
+  }
+
+  resolving.delete(typeName);
+  return {
+    byteSize: totalSize,
+    dynamic,
+    ...(notes.length > 0 ? { note: notes.join("; ") } : {})
+  };
 }
 
 function parseArrayType(type: string): { innerType: string; length: number } | null {

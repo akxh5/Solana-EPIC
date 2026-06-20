@@ -199,3 +199,5 @@ export { analyzeAnchorProject } from "./project.js";
 export { compareAccountSets, compareAnchorProjects, toMachineReadableReport } from "./diff.js";
 export { AnalysisError } from "./rust.js";
 export { simulateUpgrade, toMachineReadableSimulation } from "./simulation.js";
+export * as config from "./config/index.js";
+
