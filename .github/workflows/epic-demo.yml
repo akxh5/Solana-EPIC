@@ -124,7 +124,7 @@ jobs:
           EOF
 
       - name: Build parser-v2
-        run: cargo build -p parser-v2 --bin parser-v2
+        run: cargo build --manifest-path packages/parser-v2/Cargo.toml --bin parser-v2
 
       - name: Run EPIC on Safe Upgrade (Expecting Exit Code 0)
         id: run-safe

@@ -56,6 +56,16 @@ export function resolveParserBinary(
       }
     } catch {
       attempted.push(`NPM Package (${packageName}) -> Not installed / Resolution failed`);
+      
+      // Local development fallback for packages when not installed/linked in monorepo
+      try {
+        const __dirname = path.dirname(fileURLToPath(importMetaUrl));
+        const localPackagePath = path.resolve(__dirname, "../..", packageName.split("/")[1], "bin", binName);
+        attempted.push(`Local Monorepo Package Fallback (${packageName}) -> ${localPackagePath}`);
+        if (fs.existsSync(localPackagePath)) {
+          return localPackagePath;
+        }
+      } catch {}
     }
   } else {
     attempted.push(`NPM Package -> Unsupported platform key: ${platformKey}`);

@@ -10,7 +10,10 @@
     "dev": "turbo run dev"
   },
   "workspaces": [
-    "packages/*"
+    "packages/cli",
+    "packages/parser",
+    "packages/diff-engine",
+    "packages/github-action"
   ],
   "devDependencies": {
     "turbo": "^2.5.4",
