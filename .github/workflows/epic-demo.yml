@@ -46,7 +46,7 @@ jobs:
           
           #[derive(Accounts)]
           pub struct Initialize<'info> {
-              #[account(init, payer = user, space = 8 + 32 + 8)]
+              #[account(init, payer = user, space = 8 + 32 + 8 + 8)]
               pub state: Account<'info, UserState>,
               #[account(mut)]
               pub user: Signer<'info>,
