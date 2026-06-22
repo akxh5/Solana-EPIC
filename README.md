@@ -59,18 +59,28 @@ EPIC achieves high-fidelity analysis by compiling Rust code directly into an abs
 Scan a Solana program directory to output its detected state accounts and their serialized byte sizes.
 ```bash
 # Run local analyze command on a program folder
-npx tsx packages/cli/src/index.ts analyze packages/parser-v2/tests/fixtures/ Kamino
+npx tsx packages/cli/src/index.ts analyze fixtures/safe_program
 ```
 
 ### 2. Compare Program Upgrades
-Compare two versions of a program folder or JSON IDL files to verify ABI compatibility.
+Compare two versions of a program folder to verify ABI compatibility.
 ```bash
 # Compare old and new program versions
 npx tsx packages/cli/src/index.ts check ./demo-fixtures/old_program ./demo-fixtures/new_program_safe
 ```
 
-### 3. Run Rule Verification Crate
-Run the core parser-v2 test suite to execute 42 compile-free unit/integration validation tests.
+### 3. Run Security Audits
+Scan a Solana program or workspace for security vulnerabilities (e.g., EPIC-SEC-001).
+```bash
+# Audit a program directory and print findings in human-readable format
+npx tsx packages/cli/src/index.ts audit fixtures/vulnerable_program
+
+# Output security findings in SARIF format for CI/CD integrations
+npx tsx packages/cli/src/index.ts audit fixtures/vulnerable_program --format sarif
+```
+
+### 4. Run Rust AST Analyzer Crate tests
+Run the core parser-v2 test suite to execute unit/integration validation tests.
 ```bash
 # Run Rust analysis cargo suite
 cargo test --manifest-path packages/parser-v2/Cargo.toml
@@ -87,18 +97,39 @@ cargo test --manifest-path packages/parser-v2/Cargo.toml
 | **Try Operator Splits** | ✅ | | | Evaluates early exits from `?` operators in CFG construction. |
 | **Write-Dependency Tracking** | ✅ | | | Traces mutations through references, borrows, and aliases back to root arguments. |
 | **Ownership Check Dominance** | ✅ | | | Asserts that an owner check (`EPIC-SEC-001`) dominates write instructions. |
+| **SARIF Format Exporter** | ✅ | | | Exposes findings in SARIF JSON schema for native GitHub code-scanning integrations. |
 | **Signer Check Dominance** | | ✅ | | Asserts that authority signature checks (`EPIC-SEC-002`) dominate write instructions. |
-| **SARIF Format Exporter** | | | ✅ | Exposes findings in SARIF JSON schema for native GitHub code-scanning integrations. |
+
+---
+
+## Current Limitations
+
+While EPIC provides strong compile-free static guarantees, users should note the following constraints of the current engine:
+* **Anchor Framework Focus**: The type resolution and account layout engines are optimized for the Anchor framework's macro structures (`#[account]`, `#[derive(Accounts)]`). Plain native Solana programs are parsed, but security validations default to a strict fail-closed state.
+* **Intra-procedural SSA Tracing**: The SSA-lite engine tracks variables, references, and shadowing locally within the scope of a single instruction handler. It does not perform inter-procedural tracking across Cross-Program Invocations (CPI) or external crates.
+* **Static Bounds**: Size calculations are computed statically. Dynamic type widths (e.g., vectors, strings) are mapped to dynamic size flags and raise warnings rather than providing absolute byte offsets.
+
+---
+
+## CI/CD Integration
+
+To run EPIC as part of your GitHub Action workflow, use the `packages/epic-action` action. The action automatically runs checks on program upgrades, writes a markdown report summary, and fails the build if critical vulnerabilities or breaking layout changes are discovered.
+
+```yaml
+- name: Run EPIC Upgrade & Security Guard
+  uses: ./packages/epic-action
+  with:
+    old_path: ./demo-fixtures/old_program
+    new_path: ./demo-fixtures/new_program_safe
+```
 
 ---
 
 ## Roadmap
 
-* **EPIC-SEC-001 (Owner Validation)**: Finalize transitive Write-Dependency Graph (WDG) propagation to capture mutations on deserialized fields and buffers. (Current Release)
-* **EPIC-SEC-002 (Signer Verification)**: Implement signer-check dominance analysis across all instruction entrypoints.
-* **SARIF Integration**: Add a command-line format option to write standard SARIF outputs to direct native alerts in GitHub Security tabs.
-* **Real Repository Scanning**: Support automated multi-crate cargo workspaces and external dependency layout parsing.
-* **Extended Rule Set**: Introduce rules targeting reentrancy vectors, account size overflows, and math underflows.
+* **EPIC-SEC-002 (Signer Verification)**: Implement authority signer-check dominance analysis across all instruction entrypoints.
+* **Extended Security Rules**: Add rules targeting reentrancy vectors, account size overflows, and arithmetic overflows/underflows.
+* **External Program Layout Resolution**: Automatically fetch external program IDLs/source definitions to map multi-program execution paths.
 
 ---
 
