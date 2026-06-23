@@ -2,7 +2,10 @@
   "name": "@epic/github-action",
   "version": "0.1.0-beta.1",
   "description": "Solana EPIC Upgrade Guard GitHub Action",
-  "private": true,
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {
