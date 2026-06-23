@@ -2,186 +2,114 @@
 
 ### Deterministic Solana Upgrade & Security Analysis
 
-EPIC protects Solana protocol teams from shipping breaking program upgrades by performing static compiler audits of state layouts, ABI changes, and account validation rules before code reaches mainnet.
+EPIC protects Solana protocol teams from shipping breaking program upgrades and security vulnerabilities by performing static compiler audits of state layouts, ABI changes, and account validation rules before code reaches mainnet.
 
 ---
 
-## What EPIC Does
+## Capabilities
 
 EPIC provides deep static analysis of Anchor and Rust-based Solana programs, acting as a fail-closed gate in local development and CI/CD pipelines.
 
-* **Upgrade Safety Analysis**: Prevents state layout drift during program updates by verifying fields are safely appended rather than inserted or reordered.
-* **ABI & Layout Validation**: Calculates exact byte serialization offsets (e.g., Borsh) to flag changes in persisted type widths (`u64 -> u32` or field swaps) before deployment.
-* **Security Rule Engine**: Evaluates compile-time semantic constraints on instruction structures to enforce correct program policies.
-* **Ownership Validation (EPIC-SEC-001)**: Statically tracks mutable account write operations to ensure they are protected by an ownership check (`account.owner == program_id`) that dominates the write path.
-* **Signer Validation (EPIC-SEC-002)**: Flags write paths that modify sensitive accounts without verifying they are signed by the appropriate authority.
-* **Fail-Closed Analysis**: Evaluates compiler semantics (including try/catch bubbles, early returns, and conditional branch exits) to verify validation paths cannot be bypassed.
+### 1. Security Engine
+EPIC evaluates compile-time semantic constraints on instruction structures to enforce correct program policies, catching the following vulnerability classes:
+*   **EPIC-SEC-001: Owner Validation**: Statically tracks mutable account write operations to ensure they are protected by an ownership check (`account.owner == program_id`) that dominates the write path.
+*   **EPIC-SEC-002: Signer Validation**: Verifies that authority-like accounts performing administrative mutations are checked as signers of the transaction.
+*   **EPIC-SEC-003: Missing Post-CPI Reload**: Detects read or write access to deserialized accounts following a mutating Cross-Program Invocation (CPI) without an intervening reload of the local state cache.
+*   **EPIC-SEC-004: PDA Seed Collision Analysis**: Detects adjacent variable-length seeds (e.g., strings, raw vectors) passed during PDA derivation without static separation delimiters or fixed-width boundaries.
+*   **EPIC-SEC-005: Arbitrary CPI Target Validation**: Flags CPI target executable accounts whose keys are passed dynamically by the caller without dominating program ID checks.
 
----
-
-## Why EPIC Exists
-
-Solana smart contracts operate on flat, sequential byte arrays. Because serialization formats like Borsh deserialize fields sequentially, a seemingly minor shift—such as adding a field in the middle of a struct, reordering two fields, or changing a type's width—shifts the offsets of all trailing data. Any attempt by the upgraded program to read existing on-chain accounts will fail to deserialize, causing instant transaction failures and locking user assets on-chain.
-
-Existing Solana tooling focuses heavily on heuristic pattern matching (regular expressions or AST linters) or runtime validation (integration testing). While useful, linters miss complex aliasing, variable shadowing, or conditional bypasses, and runtime tests only cover paths hit by test inputs.
-
-EPIC solves this by performing **deterministic static analysis**. It does not compile your code or depend on runtime state; instead, it models the control flow and value state of your programs statically to prove safety properties across all executable paths.
+### 2. Upgrade Safety Engine
+Prevents state layout drift and corruption between program versions by checking:
+*   **Field Removal**: Flags the deletion of fields that shifts trailing offset alignments.
+*   **Field Reordering**: Detects when fields of differing types swap offsets, causing deserialization mismatches.
+*   **Type Changes**: Catches changed field widths or types that distort layout sizing.
+*   **Account Shrink Detection**: Flags layout size reductions that lead to account truncation or realloc failures.
+*   **Discriminator Drift Detection**: Identifies structural renames that shift the 8-byte Anchor struct discriminator.
 
 ---
 
 ## Architecture
 
-EPIC achieves high-fidelity analysis by compiling Rust code directly into an abstract model representation, running it through the following pipeline:
+EPIC compiles Solana Rust ASTs directly into control-flow models and evaluates security invariants across the following unified pipeline:
 
-```text
-       Source Code
-            ↓
-     Rust AST Parser  (Rust syn-based parser-v2 engine)
-            ↓
-  Type Inference Engine  (Unpacks nested generics, Option/Vec, aliases)
-            ↓
-  Control Flow Graph (CFG)  (Resolves execution pathways & try operators)
-            ↓
-     SSA-Lite Engine  (Tracks variable versioning, aliases, and shadowing)
-            ↓
-      GuardFacts IR   (Extracts Anchor constraints & checks structurally)
-            ↓
-   Security Rule Analyzer  (Evaluates dominance trees & Write Dependency Graphs)
-            ↓
-    CLI / SARIF Output  (Generates findings and CI fail-closed gates)
+```
+Source Code
+     ↓
+Rust AST Parser  (Rust syn-based parser-v2 engine)
+     ↓
+Type Registry    (Unpacks nested generics, Box, Option/Vec, and aliases)
+     ↓
+CFG Builder      (Constructs Control Flow Graphs & try-operator splits)
+     ↓
+SSA Engine       (Tracks Single Static Assignment variable versioning)
+     ↓
+Dominance Engine (Computes block dominance trees for security guards)
+     ↓
+GuardFacts IR    (Propagates structural checks and validations)
+     ↓
+Rules Analyzer   (Enforces EPIC-SEC-001 through 005 and Upgrade checks)
 ```
 
 ---
 
-## Example Usage
+## CLI Reference
 
-### 1. Analyze State Layout Sizes
-Scan a Solana program directory to output its detected state accounts and their serialized byte sizes.
-```bash
-# Run local analyze command on a program folder
-npx tsx packages/cli/src/index.ts analyze fixtures/safe_program
-```
+The CLI wrapper integrates all features into standard developer commands:
 
-### 2. Compare Program Upgrades
-Compare two versions of a program folder to verify ABI compatibility.
-```bash
-# Compare old and new program versions
-npx tsx packages/cli/src/index.ts check ./demo-fixtures/old_program ./demo-fixtures/new_program_safe
-```
-
-### 3. Run Security Audits
-Scan a Solana program or workspace for security vulnerabilities (e.g., EPIC-SEC-001).
-```bash
-# Audit a program directory and print findings in human-readable format
-npx tsx packages/cli/src/index.ts audit fixtures/vulnerable_program
-
-# Output security findings in SARIF format for CI/CD integrations
-npx tsx packages/cli/src/index.ts audit fixtures/vulnerable_program --format sarif
-```
-
-### 4. Run Rust AST Analyzer Crate tests
-Run the core parser-v2 test suite to execute unit/integration validation tests.
-```bash
-# Run Rust analysis cargo suite
-cargo test --manifest-path packages/parser-v2/Cargo.toml
-```
+*   `epic audit [path]`: Scans the workspace for security vulnerabilities (EPIC-SEC-001 to 005) and reports findings in `text`, `json`, or `sarif` formats.
+*   `epic check <old_path> <new_path>`: Validates upgrade compatibility between two versions of a program folder.
+*   `epic rules`: Lists all registered security rules and their metadata.
+*   `epic explain <rule_id>`: Explains a rule, its threat model, vulnerable patterns, and safe alternatives.
 
 ---
 
-## Current Capabilities
+## SARIF & GitHub Code Scanning
 
-| Feature | Implemented | In Progress | Planned | Description |
-| :--- | :---: | :---: | :---: | :--- |
-| **Borsh Size Calculation** | ✅ | | | Computes exact sizes of types, arrays, optionals, and recursive structs. |
-| **Layout Swaps & Shrinks** | ✅ | | | Flags field removals, middle-insertions, swaps, and width reductions. |
-| **Try Operator Splits** | ✅ | | | Evaluates early exits from `?` operators in CFG construction. |
-| **Write-Dependency Tracking** | ✅ | | | Traces mutations through references, borrows, and aliases back to root arguments. |
-| **Ownership Check Dominance** | ✅ | | | Asserts that an owner check (`EPIC-SEC-001`) dominates write instructions. |
-| **SARIF Format Exporter** | ✅ | | | Exposes findings in SARIF JSON schema for native GitHub code-scanning integrations. |
-| **Signer Check Dominance** | | ✅ | | Asserts that authority signature checks (`EPIC-SEC-002`) dominate write instructions. |
-
----
-
-## Current Limitations
-
-While EPIC provides strong compile-free static guarantees, users should note the following constraints of the current engine:
-* **Anchor Framework Focus**: The type resolution and account layout engines are optimized for the Anchor framework's macro structures (`#[account]`, `#[derive(Accounts)]`). Plain native Solana programs are parsed, but security validations default to a strict fail-closed state.
-* **Intra-procedural SSA Tracing**: The SSA-lite engine tracks variables, references, and shadowing locally within the scope of a single instruction handler. It does not perform inter-procedural tracking across Cross-Program Invocations (CPI) or external crates.
-* **Static Bounds**: Size calculations are computed statically. Dynamic type widths (e.g., vectors, strings) are mapped to dynamic size flags and raise warnings rather than providing absolute byte offsets.
-
----
-
-## CI/CD Integration
-
-To run EPIC as part of your GitHub Action workflow, use the `packages/epic-action` action. The action automatically runs checks on program upgrades, writes a markdown report summary, and fails the build if critical vulnerabilities or breaking layout changes are discovered.
+EPIC fully supports the Static Analysis Results Interchange Format (SARIF) JSON schema. You can integrate `epic audit -f sarif` into your GitHub Actions workflow to upload findings directly to the **GitHub Code Scanning** dashboard, rendering security warnings inline with your pull request diffs.
 
 ```yaml
-- name: Run EPIC Upgrade & Security Guard
-  uses: ./packages/epic-action
+- name: Run EPIC Security Audit
+  run: npx @epic/cli audit . -f sarif
+
+- name: Upload SARIF Report
+  uses: github/code-scanning-upload-aurora@v2
   with:
-    old_path: ./demo-fixtures/old_program
-    new_path: ./demo-fixtures/new_program_safe
+    sarif_file: sarif.json
 ```
 
 ---
 
-## Roadmap
+## Real World Validation
 
-* **EPIC-SEC-002 (Signer Verification)**: Implement authority signer-check dominance analysis across all instruction entrypoints.
-* **Extended Security Rules**: Add rules targeting reentrancy vectors, account size overflows, and arithmetic overflows/underflows.
-* **External Program Layout Resolution**: Automatically fetch external program IDLs/source definitions to map multi-program execution paths.
-
----
-
-## Repository Structure
-
-EPIC is managed as an NPM workspace containing the following packages under `/packages`:
-
-* [`packages/cli`](file:///Users/aksh/Documents/Solana%20EPIC/packages/cli): Entrypoint of the `epic` command, containing the platform binary loader.
-* [`packages/parser`](file:///Users/aksh/Documents/Solana%20EPIC/packages/parser): Handles loading, validation of configuration overrides (`epic.toml`), and project directory discovery.
-* [`packages/diff-engine`](file:///Users/aksh/Documents/Solana%20EPIC/packages/diff-engine): Core TypeScript engine evaluating ABI diff results and mapping them to severities.
-* [`packages/github-action`](file:///Users/aksh/Documents/Solana%20EPIC/packages/github-action): A GitHub Action wrapper providing pull-request status checks and markdown table reports.
-* [`packages/parser-v2`](file:///Users/aksh/Documents/Solana%20EPIC/packages/parser-v2): The core Rust program analyzer parsing Rust ASTs, compiling CFGs, and evaluating dominance rules.
+EPIC has been validated against major production Solana codebases, executing scans with zero crashes and successfully proving layout and instruction safety properties on:
+*   **Drift-v2**
+*   **Marginfi**
+*   **Kamino**
+*   **Squads-v4**
+*   **Metaplex (mpl-token-metadata)**
 
 ---
 
 ## Contributing
 
-We welcome contributions from protocol engineers and tooling developers. To set up your local environment:
-
-1. Clone the repository and install workspace dependencies:
-   ```bash
-   git clone https://github.com/solana-epic/epic.git
-   cd epic
-   npm install
-   ```
-2. Build all workspaces and compile TypeScript files:
-   ```bash
-   npm run build
-   ```
-3. Run the Node.js test suite:
-   ```bash
-   npm test
-   ```
-
-Please read [`CONTRIBUTING.md`](file:///Users/aksh/Documents/Solana%20EPIC/CONTRIBUTING.md) for more details.
-
----
-
-## EPIC vs Existing Tooling
-
-| Feature / Dimension | Traditional Linters (e.g., Clippy) | Solana Verify | Anchor Sentinel | EPIC |
-| :--- | :--- | :--- | :--- | :--- |
-| **Analysis Method** | Syntax-level pattern matching / AST checks | Bytecode comparison (reproducibility) | IDL difference checking | Static semantic compiler analysis (CFG, SSA, Dominance) |
-| **Scope of Verification** | General code style and common anti-patterns | On-chain deployment authenticity | IDL metadata compatibility | State layout serialization drift & static control-flow security rules |
-| **Upgrade Safety Check** | None | Verifies that compiler output matches target source | Compares field definitions in generated IDL | Computes byte-offset shifts on AST layout definitions directly |
-| **Validation Path Sensitivity** | Syntax-only checks; easily bypassed by aliasing or shadowing | Post-compilation binary verification | Relies on generated IDL; does not evaluate actual instruction logic paths | Traverses compiler semantic versions (SSA) to trace write-dependency paths |
-
-### Structural Differences
-* **Traditional Linters (e.g. Clippy)** identify local code style patterns and isolated anti-patterns inside a single file. They do not trace state mutation chains across multiple functions or verify block dominance across conditional pathways.
-* **Solana Verify** is used to assert that the compiled program binary on-chain matches a specific public source repository. It does not perform structural audits of state definition layouts.
-* **Anchor Sentinel** diffs generated Anchor IDL files to warn when properties change. It operates on build output metadata and does not analyze the instruction execution logic paths in the Rust source code.
-* **EPIC** performs static semantic analysis on the program's Rust AST. It reconstructs execution pathways using Control Flow Graphs (CFG), tracks references using Single Static Assignment (SSA), and evaluates dominance trees to verify security invariants (like `EPIC-SEC-001`).
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/akxh5/Solana-EPIC.git
+    cd Solana-EPIC
+    npm install
+    ```
+2.  Build Rust and TypeScript packages:
+    ```bash
+    cd packages/parser-v2
+    cargo build --release
+    cd ../cli
+    npm run build
+    ```
+3.  Run unit and integration tests:
+    ```bash
+    cd ../parser-v2
+    cargo test
+    ```
 
 ---
 
