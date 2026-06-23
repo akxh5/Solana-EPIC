@@ -324,9 +324,12 @@ pub fn convert_syn_expr(
             };
             let target = match base {
                 FactExpression::Target(t) => t,
-                _ => GuardTarget::Literal(
-                    quote::quote!(#expr_field.base).to_string().replace(" ", ""),
-                ),
+                _ => {
+                    let base_expr = &expr_field.base;
+                    GuardTarget::Literal(
+                        quote::quote!(#base_expr).to_string().replace(" ", ""),
+                    )
+                }
             };
             let property = match field.as_str() {
                 "owner" => SolanaProperty::Owner,
@@ -403,6 +406,12 @@ pub fn extract_guards_from_accounts_struct(
                         account: target_acc.clone(),
                         expected_owner: FactExpression::Literal("program_id".to_string()),
                     },
+                    FactProvenance::default_declared(),
+                ));
+            }
+            if custom_type == "Signer" || custom_type.starts_with("Signer<") {
+                facts.push((
+                    GuardFact::Signer(target_acc.clone()),
                     FactProvenance::default_declared(),
                 ));
             }
@@ -634,7 +643,8 @@ fn extract_owner_from_syn_expr(expr: &syn::Expr) -> Option<String> {
     if let syn::Expr::Field(expr_field) = expr {
         if let syn::Member::Named(ident) = &expr_field.member {
             if ident == "owner" {
-                let base_str = quote::quote!(#expr_field.base).to_string().replace(" ", "");
+                let base_expr = &expr_field.base;
+                let base_str = quote::quote!(#base_expr).to_string().replace(" ", "");
                 if base_str.starts_with("ctx.accounts.") {
                     return Some(base_str["ctx.accounts.".len()..].to_string());
                 } else {
@@ -648,6 +658,122 @@ fn extract_owner_from_syn_expr(expr: &syn::Expr) -> Option<String> {
 
 fn extract_expected_owner_from_syn_expr(expr: &syn::Expr) -> String {
     quote::quote!(#expr).to_string().replace(" ", "")
+}
+
+fn extract_signer_check_from_expr(expr: &ExpressionNode) -> Option<(String, bool)> {
+    match &expr.kind {
+        ExpressionKind::FieldAccess { object, field } => {
+            if field == "is_signer" {
+                let obj_str = expr_to_string(object);
+                let acc = if obj_str.starts_with("ctx.accounts.") {
+                    obj_str["ctx.accounts.".len()..].to_string()
+                } else {
+                    obj_str
+                };
+                return Some((acc, true));
+            }
+        }
+        ExpressionKind::BinaryOp { op, lhs, rhs } => {
+            if op == "!" {
+                if let Some((acc, expected)) = extract_signer_check_from_expr(lhs) {
+                    return Some((acc, !expected));
+                }
+            } else if op == "==" || op == "!=" {
+                // Check if one side is is_signer
+                if let Some((acc, base_expected)) = extract_signer_check_from_expr(lhs) {
+                    let val_str = expr_to_string(rhs);
+                    let val_bool = if val_str == "true" {
+                        true
+                    } else if val_str == "false" {
+                        false
+                    } else {
+                        return None;
+                    };
+                    let final_expected = if op == "==" {
+                        val_bool == base_expected
+                    } else {
+                        val_bool != base_expected
+                    };
+                    return Some((acc, final_expected));
+                }
+                if let Some((acc, base_expected)) = extract_signer_check_from_expr(rhs) {
+                    let val_str = expr_to_string(lhs);
+                    let val_bool = if val_str == "true" {
+                        true
+                    } else if val_str == "false" {
+                        false
+                    } else {
+                        return None;
+                    };
+                    let final_expected = if op == "==" {
+                        val_bool == base_expected
+                    } else {
+                        val_bool != base_expected
+                    };
+                    return Some((acc, final_expected));
+                }
+            }
+        }
+        _ => {}
+    }
+    None
+}
+
+fn extract_signer_from_syn_expr(expr: &syn::Expr) -> Option<(String, bool)> {
+    match expr {
+        syn::Expr::Field(expr_field) => {
+            if let syn::Member::Named(ident) = &expr_field.member {
+                if ident == "is_signer" {
+                    let base_expr = &expr_field.base;
+                    let base_str = quote::quote!(#base_expr).to_string().replace(" ", "");
+                    let acc = if base_str.starts_with("ctx.accounts.") {
+                        base_str["ctx.accounts.".len()..].to_string()
+                    } else {
+                        base_str
+                    };
+                    return Some((acc, true));
+                }
+            }
+        }
+        syn::Expr::Unary(expr_unary) => {
+            if let syn::UnOp::Not(_) = expr_unary.op {
+                if let Some((acc, expected)) = extract_signer_from_syn_expr(&expr_unary.expr) {
+                    return Some((acc, !expected));
+                }
+            }
+        }
+        syn::Expr::Binary(eb) => {
+            if matches!(eb.op, syn::BinOp::Eq(_)) {
+                if let Some((acc, expected)) = extract_signer_from_syn_expr(&eb.left) {
+                    let val_expr = &eb.right;
+                    let val_str = quote::quote!(#val_expr).to_string().replace(" ", "");
+                    let is_true = val_str == "true";
+                    return Some((acc, expected == is_true));
+                }
+                if let Some((acc, expected)) = extract_signer_from_syn_expr(&eb.right) {
+                    let val_expr = &eb.left;
+                    let val_str = quote::quote!(#val_expr).to_string().replace(" ", "");
+                    let is_true = val_str == "true";
+                    return Some((acc, expected == is_true));
+                }
+            } else if matches!(eb.op, syn::BinOp::Ne(_)) {
+                if let Some((acc, expected)) = extract_signer_from_syn_expr(&eb.left) {
+                    let val_expr = &eb.right;
+                    let val_str = quote::quote!(#val_expr).to_string().replace(" ", "");
+                    let is_true = val_str == "true";
+                    return Some((acc, expected != is_true));
+                }
+                if let Some((acc, expected)) = extract_signer_from_syn_expr(&eb.right) {
+                    let val_expr = &eb.left;
+                    let val_str = quote::quote!(#val_expr).to_string().replace(" ", "");
+                    let is_true = val_str == "true";
+                    return Some((acc, expected != is_true));
+                }
+            }
+        }
+        _ => {}
+    }
+    None
 }
 
 pub fn extract_imperative_checks(
@@ -713,6 +839,53 @@ pub fn extract_imperative_checks(
                     }
                 }
             }
+
+            if let Some((acc_name, expected_val)) = extract_signer_check_from_expr(cond) {
+                if let Some(&symbol_id) = symbol_table.get(&acc_name) {
+                    let target_acc = GuardTarget::Account(symbol_id);
+                    if !expected_val {
+                        let else_node_opt = cfg.edges.iter()
+                            .find(|e| e.from == edge.from && e.to != edge.to)
+                            .map(|e| e.to);
+                        if let Some(else_node) = else_node_opt {
+                            if is_terminating_branch(cfg, edge.to, else_node) {
+                                facts.push((
+                                    GuardFact::Signer(target_acc.clone()),
+                                    FactProvenance {
+                                        source_file: file_path.to_string(),
+                                        line_number: 0,
+                                        column_number: 0,
+                                        framework: "Anchor".to_string(),
+                                        confidence_level: FactConfidence::Asserted,
+                                        node_id: Some(else_node),
+                                        statement_index: None,
+                                    },
+                                ));
+                            }
+                        }
+                    } else {
+                        let else_node_opt = cfg.edges.iter()
+                            .find(|e| e.from == edge.from && e.to != edge.to)
+                            .map(|e| e.to);
+                        if let Some(else_node) = else_node_opt {
+                            if is_terminating_branch(cfg, else_node, edge.to) {
+                                facts.push((
+                                    GuardFact::Signer(target_acc.clone()),
+                                    FactProvenance {
+                                        source_file: file_path.to_string(),
+                                        line_number: 0,
+                                        column_number: 0,
+                                        framework: "Anchor".to_string(),
+                                        confidence_level: FactConfidence::Asserted,
+                                        node_id: Some(edge.to),
+                                        statement_index: None,
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -725,7 +898,7 @@ pub fn extract_imperative_checks(
                     if let Some(&first_part) = parts.first() {
                         let cleaned = first_part.replace(" ", "");
                         if let Ok(expr) = syn::parse_str::<syn::Expr>(&cleaned) {
-                            if let syn::Expr::Binary(eb) = expr {
+                            if let syn::Expr::Binary(eb) = &expr {
                                 if matches!(eb.op, syn::BinOp::Eq(_)) {
                                     if let Some(acc) = extract_owner_from_syn_expr(&eb.left) {
                                         let expected = extract_expected_owner_from_syn_expr(&eb.right);
@@ -765,6 +938,25 @@ pub fn extract_imperative_checks(
                                                 },
                                             ));
                                         }
+                                    }
+                                }
+                            }
+
+                            if let Some((acc, expected_val)) = extract_signer_from_syn_expr(&expr) {
+                                if expected_val {
+                                    if let Some(&symbol_id) = symbol_table.get(&acc) {
+                                        facts.push((
+                                            GuardFact::Signer(GuardTarget::Account(symbol_id)),
+                                            FactProvenance {
+                                                source_file: file_path.to_string(),
+                                                line_number: stmt.line_number,
+                                                column_number: 0,
+                                                framework: "Anchor".to_string(),
+                                                confidence_level: FactConfidence::Asserted,
+                                                node_id: Some(node_id),
+                                                statement_index: Some(stmt_idx),
+                                            },
+                                        ));
                                     }
                                 }
                             }
@@ -813,6 +1005,46 @@ pub fn extract_imperative_checks(
                                             statement_index: Some(stmt_idx),
                                         },
                                     ));
+                                }
+                            }
+
+                            if let Some((acc, expected1)) = extract_signer_from_syn_expr(&e1) {
+                                let val_str = quote::quote!(#e2).to_string().replace(" ", "");
+                                let is_true = val_str == "true";
+                                if expected1 == is_true {
+                                    if let Some(&symbol_id) = symbol_table.get(&acc) {
+                                        facts.push((
+                                            GuardFact::Signer(GuardTarget::Account(symbol_id)),
+                                            FactProvenance {
+                                                source_file: file_path.to_string(),
+                                                line_number: stmt.line_number,
+                                                column_number: 0,
+                                                framework: "Anchor".to_string(),
+                                                confidence_level: FactConfidence::Asserted,
+                                                node_id: Some(node_id),
+                                                statement_index: Some(stmt_idx),
+                                            },
+                                        ));
+                                    }
+                                }
+                            } else if let Some((acc, expected2)) = extract_signer_from_syn_expr(&e2) {
+                                let val_str = quote::quote!(#e1).to_string().replace(" ", "");
+                                let is_true = val_str == "true";
+                                if expected2 == is_true {
+                                    if let Some(&symbol_id) = symbol_table.get(&acc) {
+                                        facts.push((
+                                            GuardFact::Signer(GuardTarget::Account(symbol_id)),
+                                            FactProvenance {
+                                                source_file: file_path.to_string(),
+                                                line_number: stmt.line_number,
+                                                column_number: 0,
+                                                framework: "Anchor".to_string(),
+                                                confidence_level: FactConfidence::Asserted,
+                                                node_id: Some(node_id),
+                                                statement_index: Some(stmt_idx),
+                                            },
+                                        ));
+                                    }
                                 }
                             }
                         }
