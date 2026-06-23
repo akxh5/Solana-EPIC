@@ -10,7 +10,6 @@ session.txt
 **/target/
 *.err
 *.json
-docs/archive/
 demo-fixtures/
 epic-report.md
 epic-report.json

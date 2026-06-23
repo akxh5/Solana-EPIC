@@ -140,6 +140,66 @@ function generateSarif(findings: any[]): any {
     }
   });
 
+  rulesMap.set("EPIC-SEC-002", {
+    id: "EPIC-SEC-002",
+    shortDescription: {
+      text: "Missing Signer Validation"
+    },
+    fullDescription: {
+      text: "Unchecked mutable write or administrative mutation without dominating signer validation."
+    },
+    helpUri: "https://github.com/akxh5/Solana-EPIC/blob/main/docs/rules/EPIC-SEC-002.md",
+    properties: {
+      category: "Security",
+      precision: "high"
+    }
+  });
+
+  rulesMap.set("EPIC-SEC-003", {
+    id: "EPIC-SEC-003",
+    shortDescription: {
+      text: "Missing Post-CPI Account Reload"
+    },
+    fullDescription: {
+      text: "Account state accessed after a CPI mutation without reload, which may read or write stale cache state."
+    },
+    helpUri: "https://github.com/akxh5/Solana-EPIC/blob/main/docs/rules/EPIC-SEC-003.md",
+    properties: {
+      category: "Security",
+      precision: "high"
+    }
+  });
+
+  rulesMap.set("EPIC-SEC-004", {
+    id: "EPIC-SEC-004",
+    shortDescription: {
+      text: "PDA Cryptographic Seed Collision Risk"
+    },
+    fullDescription: {
+      text: "Adjacent variable-length seeds without separation delimiters create boundary ambiguities that permit PDA hijacking."
+    },
+    helpUri: "https://github.com/akxh5/Solana-EPIC/blob/main/docs/rules/EPIC-SEC-004.md",
+    properties: {
+      category: "Security",
+      precision: "high"
+    }
+  });
+
+  rulesMap.set("EPIC-SEC-005", {
+    id: "EPIC-SEC-005",
+    shortDescription: {
+      text: "Arbitrary CPI Target Program Spoofing"
+    },
+    fullDescription: {
+      text: "Invoking CPI on an external program without verifying that the target program matches a trusted program ID."
+    },
+    helpUri: "https://github.com/akxh5/Solana-EPIC/blob/main/docs/rules/EPIC-SEC-005.md",
+    properties: {
+      category: "Security",
+      precision: "high"
+    }
+  });
+
   const results = findings.map((f) => {
     let level = "warning";
     const sev = f.severity.toLowerCase();
@@ -317,6 +377,22 @@ program
     console.log("EPIC-SEC-001");
     console.log("Owner Validation");
     console.log("Critical");
+    console.log("Implemented\n");
+    console.log("EPIC-SEC-002");
+    console.log("Missing Signer Validation");
+    console.log("Critical");
+    console.log("Implemented\n");
+    console.log("EPIC-SEC-003");
+    console.log("Missing Post-CPI Account Reload");
+    console.log("Critical");
+    console.log("Implemented\n");
+    console.log("EPIC-SEC-004");
+    console.log("PDA Cryptographic Seed Collision Risk");
+    console.log("High");
+    console.log("Implemented\n");
+    console.log("EPIC-SEC-005");
+    console.log("Arbitrary CPI Target Program Spoofing");
+    console.log("Critical");
     console.log("Implemented");
   });
 
@@ -375,6 +451,183 @@ pub struct Withdraw<'info> {
 
 ## Historical Exploit References
 * Cashio App ($52M, March 2022)`);
+      }
+    } else if (normRuleId === "EPIC-SEC-002") {
+      let content = "";
+      try {
+        const docPaths = [
+          path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../docs/rules/EPIC-SEC-002.md"),
+          path.resolve(process.cwd(), "docs/rules/EPIC-SEC-002.md")
+        ];
+        for (const p of docPaths) {
+          if (fs.existsSync(p)) {
+            content = fs.readFileSync(p, "utf8");
+            break;
+          }
+        }
+      } catch (err) {
+        // ignore error
+      }
+      
+      if (content) {
+        console.log(content);
+      } else {
+        console.log(`# EPIC-SEC-002: Missing Signer Validation
+
+## Description
+Detects situations where authority-like accounts are capable of mutating state, authorizing actions, or executing privileged flows without proving signer authority.
+
+## Threat Model
+In Solana, callers supply all account inputs. Because any caller can pass arbitrary public keys, the program must verify that the authority-like account signed the transaction. Failing to perform this signer validation allows an attacker to spoof the authority account.
+
+## Vulnerable Example
+\`\`\`rust
+pub fn update_config(ctx: Context<UpdateConfig>, new_val: u64) -> Result<()> {
+    ctx.accounts.config.admin_value = new_val;
+    Ok(())
+}
+// with authority declared as AccountInfo without Signer constraint
+\`\`\`
+
+## Safe Example
+\`\`\`rust
+pub fn update_config(ctx: Context<UpdateConfig>, new_val: u64) -> Result<()> {
+    require!(ctx.accounts.authority.is_signer, ErrorCode::MissingSignature);
+    ctx.accounts.config.admin_value = new_val;
+    Ok(())
+}
+\`\`\``);
+      }
+    } else if (normRuleId === "EPIC-SEC-003") {
+      let content = "";
+      try {
+        const docPaths = [
+          path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../docs/rules/EPIC-SEC-003.md"),
+          path.resolve(process.cwd(), "docs/rules/EPIC-SEC-003.md")
+        ];
+        for (const p of docPaths) {
+          if (fs.existsSync(p)) {
+            content = fs.readFileSync(p, "utf8");
+            break;
+          }
+        }
+      } catch (err) {
+        // ignore error
+      }
+      
+      if (content) {
+        console.log(content);
+      } else {
+        console.log(`# EPIC-SEC-003: Missing Post-CPI Account Reload
+
+## Description
+Detects scenarios where an account's state data is read or written after a Cross-Program Invocation (CPI) that potentially mutates on-chain state, without executing an intervening reload.
+
+## Threat Model
+In Solana, external programs (like token program or pools) mutate accounts during CPI calls. The local execution context maintains a deserialized in-memory cache of accounts. Calling programs must refresh this cache via \`reload()\` before accessing fields again.
+
+## Vulnerable Example
+\`\`\`rust
+token::transfer(cpi_ctx, amount)?;
+ctx.accounts.vault.amount -= amount; // Stale layout read and write!
+\`\`\`
+
+## Safe Example
+\`\`\`rust
+token::transfer(cpi_ctx, amount)?;
+ctx.accounts.vault.reload()?; // Safe: reload matches state
+ctx.accounts.vault.amount -= amount;
+\`\`\``);
+      }
+    } else if (normRuleId === "EPIC-SEC-004") {
+      let content = "";
+      try {
+        const docPaths = [
+          path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../docs/rules/EPIC-SEC-004.md"),
+          path.resolve(process.cwd(), "docs/rules/EPIC-SEC-004.md")
+        ];
+        for (const p of docPaths) {
+          if (fs.existsSync(p)) {
+            content = fs.readFileSync(p, "utf8");
+            break;
+          }
+        }
+      } catch (err) {
+        // ignore error
+      }
+      
+      if (content) {
+        console.log(content);
+      } else {
+        console.log(`# EPIC-SEC-004: PDA Cryptographic Seed Collision Risk
+
+## Description
+Detects scenarios where adjacent variable-length seeds in Program Derived Address (PDA) derivation can merge boundaries, allowing an attacker to generate the same address from two different inputs.
+
+## Threat Model
+In Solana, PDAs are derived by concatenating the raw seed bytes without adding delimiters. When two variable-length seeds (like strings or dynamic byte arrays) are placed next to each other, boundary bytes can shift between seeds while keeping the concatenated byte stream identical.
+
+## Vulnerable Example
+\`\`\`rust
+Pubkey::find_program_address(
+    &[
+        user_name.as_bytes(),
+        folder_name.as_bytes(),
+    ],
+    program_id,
+);
+\`\`\`
+
+## Safe Example
+\`\`\`rust
+Pubkey::find_program_address(
+    &[
+        user_name.as_bytes(),
+        b"|",
+        folder_name.as_bytes(),
+    ],
+    program_id,
+);
+\`\`\``);
+      }
+    } else if (normRuleId === "EPIC-SEC-005") {
+      let content = "";
+      try {
+        const docPaths = [
+          path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../docs/rules/EPIC-SEC-005.md"),
+          path.resolve(process.cwd(), "docs/rules/EPIC-SEC-005.md")
+        ];
+        for (const p of docPaths) {
+          if (fs.existsSync(p)) {
+            content = fs.readFileSync(p, "utf8");
+            break;
+          }
+        }
+      } catch (err) {
+        // ignore error
+      }
+      
+      if (content) {
+        console.log(content);
+      } else {
+        console.log(`# EPIC-SEC-005: Arbitrary CPI Target Program Spoofing
+
+## Description
+Detects scenarios where a program invokes another program via CPI without verifying that the target program matches a trusted program ID.
+
+## Threat Model
+In Solana, callers supply all input accounts, including the program being invoked. If the program fails to verify that the target program account is trusted, an attacker can pass a custom malicious program and hijack control flow under the PDA authority of the program.
+
+## Vulnerable Example
+\`\`\`rust
+invoke(&ix, &[source, dest, token_program])?; // token_program is not validated!
+\`\`\`
+
+## Safe Example
+\`\`\`rust
+require_keys_eq!(token_program.key(), token::ID);
+invoke(&ix, &[source, dest, token_program])?;
+\`\`\``);
       }
     } else {
       console.log(`Rule ${ruleId} not found.`);
