@@ -1,5 +1,5 @@
 {
-  "name": "@epic/github-action",
+  "name": "@epic-security/github-action",
   "version": "0.1.0-beta.1",
   "description": "Solana EPIC Upgrade Guard GitHub Action",
   "private": false,
@@ -16,8 +16,8 @@
   "dependencies": {
     "@actions/core": "^1.10.1",
     "@actions/github": "^6.0.0",
-    "@epic/diff-engine": "^0.1.0-beta.1",
-    "@epic/parser": "^0.1.0-beta.1"
+    "@epic-security/diff-engine": "^0.1.0-beta.1",
+    "@epic-security/parser": "^0.1.0-beta.1"
   },
   "devDependencies": {
     "esbuild": "^0.20.1",

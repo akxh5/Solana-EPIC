@@ -1,6 +1,6 @@
-import type { DiffReport } from "@epic/diff-engine";
-import type { config } from "@epic/parser";
-import { createUpgradeIntelligenceItem } from "@epic/diff-engine";
+import type { DiffReport } from "@epic-security/diff-engine";
+import type { config } from "@epic-security/parser";
+import { createUpgradeIntelligenceItem } from "@epic-security/diff-engine";
 
 export function generateCompactMarkdownReport(
   report: DiffReport,

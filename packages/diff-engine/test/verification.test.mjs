@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { compareAccountLayouts } from "../dist/compare.js";
-import { analyzeAnchorProject } from "@epic/parser";
+import { analyzeAnchorProject } from "@epic-security/parser";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";

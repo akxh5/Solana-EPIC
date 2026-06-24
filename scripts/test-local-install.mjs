@@ -84,7 +84,7 @@ async function main() {
     // 5. Verify optional dependency resolution and loader selection
     console.log("Verifying loader binary resolution...");
     const testLoaderScript = `
-import { resolveParserBinary } from "@epic/cli/dist/loader.js";
+import { resolveParserBinary } from "@epic-security/cli/dist/loader.js";
 try {
   const binaryPath = resolveParserBinary();
   console.log("RESOLVED_BINARY_PATH:" + binaryPath);
@@ -114,7 +114,7 @@ try {
 
     // 6. Execute: epic --help
     console.log("Executing 'epic --help'...");
-    // We execute it by calling node node_modules/.bin/epic or node node_modules/@epic/cli/dist/index.js
+    // We execute it by calling node node_modules/.bin/epic or node node_modules/@epic-security/cli/dist/index.js
     const helpOutput = runCommand("node node_modules/.bin/epic --help", tempDir);
     console.log("--- epic --help Output ---");
     console.log(helpOutput);

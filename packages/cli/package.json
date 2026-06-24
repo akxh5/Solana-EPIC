@@ -1,5 +1,5 @@
 {
-  "name": "@epic/cli",
+  "name": "@epic-security/cli",
   "version": "0.1.0-beta.1",
   "private": false,
   "publishConfig": {
@@ -21,15 +21,15 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@epic/diff-engine": "^0.1.0-beta.1",
-    "@epic/parser": "^0.1.0-beta.1",
+    "@epic-security/diff-engine": "^0.1.0-beta.1",
+    "@epic-security/parser": "^0.1.0-beta.1",
     "commander": "^14.0.0"
   },
   "optionalDependencies": {
-    "@epic/cli-darwin-arm64": "^0.1.0-beta.1",
-    "@epic/cli-darwin-x64": "^0.1.0-beta.1",
-    "@epic/cli-linux-x64": "^0.1.0-beta.1",
-    "@epic/cli-win32-x64": "^0.1.0-beta.1"
+    "@epic-security/cli-darwin-arm64": "^0.1.0-beta.1",
+    "@epic-security/cli-darwin-x64": "^0.1.0-beta.1",
+    "@epic-security/cli-linux-x64": "^0.1.0-beta.1",
+    "@epic-security/cli-win32-x64": "^0.1.0-beta.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",

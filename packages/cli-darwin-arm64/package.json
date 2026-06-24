@@ -1,5 +1,5 @@
 {
-  "name": "@epic/cli-darwin-arm64",
+  "name": "@epic-security/cli-darwin-arm64",
   "version": "0.1.0-beta.1",
   "description": "Prebuilt darwin-arm64 binary of parser-v2 for EPIC CLI",
   "private": false,
