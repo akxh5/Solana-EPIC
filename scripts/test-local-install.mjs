@@ -35,13 +35,13 @@ async function main() {
     }
 
     const files = fs.readdirSync(artifactsDir);
-    const cliTgz = files.find(f => f.startsWith("epic-cli-0."));
-    const parserTgz = files.find(f => f.startsWith("epic-parser-0."));
-    const diffEngineTgz = files.find(f => f.startsWith("epic-diff-engine-0."));
+    const cliTgz = files.find(f => f.startsWith("solana-epic-cli-0."));
+    const parserTgz = files.find(f => f.startsWith("solana-epic-parser-0."));
+    const diffEngineTgz = files.find(f => f.startsWith("solana-epic-diff-engine-0."));
     
     // Platform mapping
     const platformKey = `${process.platform}-${process.arch}`;
-    const platformTgz = files.find(f => f.startsWith(`epic-cli-${platformKey}-0.`));
+    const platformTgz = files.find(f => f.startsWith(`solana-epic-cli-${platformKey}-0.`));
 
     if (!cliTgz || !parserTgz || !diffEngineTgz) {
       throw new Error("Core package tarballs (cli, parser, or diff-engine) are missing from artifacts/local-packages/");
@@ -84,7 +84,7 @@ async function main() {
     // 5. Verify optional dependency resolution and loader selection
     console.log("Verifying loader binary resolution...");
     const testLoaderScript = `
-import { resolveParserBinary } from "@epic-security/cli/dist/loader.js";
+import { resolveParserBinary } from "@solana-epic/cli/dist/loader.js";
 try {
   const binaryPath = resolveParserBinary();
   console.log("RESOLVED_BINARY_PATH:" + binaryPath);
@@ -114,7 +114,7 @@ try {
 
     // 6. Execute: epic --help
     console.log("Executing 'epic --help'...");
-    // We execute it by calling node node_modules/.bin/epic or node node_modules/@epic-security/cli/dist/index.js
+    // We execute it by calling node node_modules/.bin/epic or node node_modules/@solana-epic/cli/dist/index.js
     const helpOutput = runCommand("node node_modules/.bin/epic --help", tempDir);
     console.log("--- epic --help Output ---");
     console.log(helpOutput);

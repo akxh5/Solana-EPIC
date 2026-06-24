@@ -17,14 +17,14 @@ files_to_modify = [
     "packages/github-action/src/report.ts",
     "packages/diff-engine/test/verification.test.mjs",
     "scripts/publish.sh",
-    "scripts/test-local-install.mjs"
+    "scripts/test-local-install.mjs",
+    "README.md"
 ]
 
 root_dir = "/Users/aksh/Documents/Solana EPIC"
-old_scope = "@epic/"
-new_scope = "@epic-security/"
+target_scope = "@solana-epic/"
 
-print(f"Starting scope migration from '{old_scope}' to '{new_scope}'...")
+print(f"Starting scope migration to '{target_scope}'...")
 
 for rel_path in files_to_modify:
     abs_path = os.path.join(root_dir, rel_path)
@@ -35,12 +35,21 @@ for rel_path in files_to_modify:
     with open(abs_path, "r", encoding="utf-8") as f:
         content = f.read()
     
-    if old_scope in content:
-        new_content = content.replace(old_scope, new_scope)
+    updated = False
+    # Replace @epic-security/
+    if "@epic-security/" in content:
+        content = content.replace("@epic-security/", target_scope)
+        updated = True
+    # Replace @epic/
+    if "@epic/" in content:
+        content = content.replace("@epic/", target_scope)
+        updated = True
+        
+    if updated:
         with open(abs_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+            f.write(content)
         print(f"Updated: {rel_path}")
     else:
-        print(f"Already updated or no match: {rel_path}")
+        print(f"No match/Already migrated: {rel_path}")
 
 print("Migration completed successfully.")

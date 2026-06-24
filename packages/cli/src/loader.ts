@@ -4,10 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const PLATFORM_MAP: Record<string, string> = {
-  "darwin-arm64": "@epic-security/cli-darwin-arm64",
-  "darwin-x64": "@epic-security/cli-darwin-x64",
-  "linux-x64": "@epic-security/cli-linux-x64",
-  "win32-x64": "@epic-security/cli-win32-x64"
+  "darwin-arm64": "@solana-epic/cli-darwin-arm64",
+  "darwin-x64": "@solana-epic/cli-darwin-x64",
+  "linux-x64": "@solana-epic/cli-linux-x64",
+  "win32-x64": "@solana-epic/cli-win32-x64"
 };
 
 export class EPICBinaryNotFoundError extends Error {

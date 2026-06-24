@@ -1,5 +1,5 @@
 {
-  "name": "@epic-security/diff-engine",
+  "name": "@solana-epic/diff-engine",
   "version": "0.1.0-beta.1",
   "private": false,
   "publishConfig": {
@@ -23,7 +23,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@epic-security/parser": "^0.1.0-beta.1"
+    "@solana-epic/parser": "^0.1.0-beta.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.29"

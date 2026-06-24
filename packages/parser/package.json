@@ -1,5 +1,5 @@
 {
-  "name": "@epic-security/parser",
+  "name": "@solana-epic/parser",
   "version": "0.1.0-beta.1",
   "private": false,
   "publishConfig": {

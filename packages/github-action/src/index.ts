@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
-import { compareAnchorPrograms } from "@epic-security/diff-engine";
-import { config } from "@epic-security/parser";
+import { compareAnchorPrograms } from "@solana-epic/diff-engine";
+import { config } from "@solana-epic/parser";
 import { upsertPRComment, checkIfConfigChanged } from "./github.js";
 import { generateCompactMarkdownReport } from "./report.js";
 

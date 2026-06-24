@@ -69,7 +69,7 @@ EPIC fully supports the Static Analysis Results Interchange Format (SARIF) JSON 
 
 ```yaml
 - name: Run EPIC Security Audit
-  run: npx @epic/cli audit . -f sarif
+  run: npx @solana-epic/cli audit . -f sarif
 
 - name: Upload SARIF Report
   uses: github/code-scanning-upload-aurora@v2

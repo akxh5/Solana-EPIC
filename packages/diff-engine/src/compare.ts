@@ -1,5 +1,5 @@
-import type { AccountField, AccountStruct, AnalyzeResult, config } from "@epic-security/parser";
-import { analyzeAnchorProject } from "@epic-security/parser";
+import type { AccountField, AccountStruct, AnalyzeResult, config } from "@solana-epic/parser";
+import { analyzeAnchorProject } from "@solana-epic/parser";
 import { classifyFindings, highestSeverity } from "./classify.js";
 import { resolveFindingsWithConfig, findProgramName } from "./resolve.js";
 import path from "node:path";

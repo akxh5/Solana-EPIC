@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { DiffFinding, Severity } from "./compare.js";
-import type { config } from "@epic-security/parser";
+import type { config } from "@solana-epic/parser";
 
 const BANNED_FINDINGS = new Set(["FIELD_REMOVED", "FIELD_REORDERED"]);
 
