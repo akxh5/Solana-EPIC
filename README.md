@@ -1,72 +1,102 @@
 # EPIC
 
-### Deterministic Solana Upgrade & Security Analysis
+<p align="center">
+  <b>Security-First Upgrade Intelligence for Solana Programs</b>
+</p>
 
-EPIC protects Solana protocol teams from shipping breaking program upgrades and security vulnerabilities by performing static compiler audits of state layouts, ABI changes, and account validation rules before code reaches mainnet.
-
----
-
-## Capabilities
-
-EPIC provides deep static analysis of Anchor and Rust-based Solana programs, acting as a fail-closed gate in local development and CI/CD pipelines.
-
-### 1. Security Engine
-EPIC evaluates compile-time semantic constraints on instruction structures to enforce correct program policies, catching the following vulnerability classes:
-*   **EPIC-SEC-001: Owner Validation**: Statically tracks mutable account write operations to ensure they are protected by an ownership check (`account.owner == program_id`) that dominates the write path.
-*   **EPIC-SEC-002: Signer Validation**: Verifies that authority-like accounts performing administrative mutations are checked as signers of the transaction.
-*   **EPIC-SEC-003: Missing Post-CPI Reload**: Detects read or write access to deserialized accounts following a mutating Cross-Program Invocation (CPI) without an intervening reload of the local state cache.
-*   **EPIC-SEC-004: PDA Seed Collision Analysis**: Detects adjacent variable-length seeds (e.g., strings, raw vectors) passed during PDA derivation without static separation delimiters or fixed-width boundaries.
-*   **EPIC-SEC-005: Arbitrary CPI Target Validation**: Flags CPI target executable accounts whose keys are passed dynamically by the caller without dominating program ID checks.
-
-### 2. Upgrade Safety Engine
-Prevents state layout drift and corruption between program versions by checking:
-*   **Field Removal**: Flags the deletion of fields that shifts trailing offset alignments.
-*   **Field Reordering**: Detects when fields of differing types swap offsets, causing deserialization mismatches.
-*   **Type Changes**: Catches changed field widths or types that distort layout sizing.
-*   **Account Shrink Detection**: Flags layout size reductions that lead to account truncation or realloc failures.
-*   **Discriminator Drift Detection**: Identifies structural renames that shift the 8-byte Anchor struct discriminator.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@solana-epic/cli"><img src="https://img.shields.io/npm/v/@solana-epic/cli.svg?style=flat-square&color=blue" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/akxh5/Solana-EPIC.svg?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/akxh5/Solana-EPIC/releases"><img src="https://img.shields.io/github/v/release/akxh5/Solana-EPIC.svg?style=flat-square&color=orange" alt="GitHub release" /></a>
+  <a href="https://github.com/akxh5/Solana-EPIC/actions"><img src="https://img.shields.io/github/actions/workflow/status/akxh5/Solana-EPIC/ci.yml?branch=main&style=flat-square" alt="GitHub Actions status" /></a>
+</p>
 
 ---
 
-## Architecture
+EPIC protects Solana protocol teams from shipping breaking program upgrades and security vulnerabilities. By performing static syn-compiler audits of state layouts, ABI changes, and account validation rules, EPIC ensures your upgrades are safe before code ever reaches mainnet.
 
-EPIC compiles Solana Rust ASTs directly into control-flow models and evaluates security invariants across the following unified pipeline:
+---
 
+## Why EPIC Exists
+
+Every Solana upgrade introduces risk. A seemingly harmless change can:
+*   **Break account layouts** and corrupt deserialization layouts on mainnet.
+*   **Introduce critical security vulnerabilities** in modified instruction paths.
+*   **Create upgrade incompatibilities** that block protocol operations.
+*   **Open memory/realloc attack vectors** due to unintended account shrinkage.
+
+Most teams discover these issues during post-mortem investigations or expensive auditing cycles. **EPIC catches them at compile time, in local development, and on every pull request.**
+
+---
+
+## What EPIC Does
+
+### 1. Upgrade Intelligence (`epic check`)
+Compare two program versions and understand exactly what changed in state and serialization layouts.
 ```
-Source Code
-     ↓
-Rust AST Parser  (Rust syn-based parser-v2 engine)
-     ↓
-Type Registry    (Unpacks nested generics, Box, Option/Vec, and aliases)
-     ↓
-CFG Builder      (Constructs Control Flow Graphs & try-operator splits)
-     ↓
-SSA Engine       (Tracks Single Static Assignment variable versioning)
-     ↓
-Dominance Engine (Computes block dominance trees for security guards)
-     ↓
-GuardFacts IR    (Propagates structural checks and validations)
-     ↓
-Rules Analyzer   (Enforces EPIC-SEC-001 through 005 and Upgrade checks)
+$ epic check ./old-program ./new-program
+
+🔍 Comparing Program Layouts...
+[CRITICAL] Layout size decrease detected on struct Position: 56 bytes -> 48 bytes.
+           Account shrinkage can lead to runtime deserialization failures.
+           Consider using realloc or adding padding fields to preserve layout sizing.
 ```
 
+### 2. Security Auditing (`epic audit`)
+Run static security rules against your codebase. EPIC analyzes compile-time semantic constraints on instruction structures to enforce correct program policies.
+```
+$ epic audit .
+
+🔍 Auditing Security Invariants...
+[CRITICAL] EPIC-SEC-003: Missing Post-CPI Account Reload
+           Affected File: programs/vault/src/lib.rs:42
+           Context: State mutation of Vault account following CPI invocation
+           Recommendation: Reload local state cache (e.g., run vault.reload()?) after CPI.
+```
+
+### 3. Account Intelligence (`epic analyze`)
+Analyze state account layouts and serialized sizes to manage state growth impact.
+```
+$ epic analyze .
+
+🔍 Analyzing State Account Layouts...
+STATE ACCOUNTS:
+├── Vault (49 bytes) [program::lib] [Static]
+└── Position (56 bytes) [program::lib] [Static]
+```
+
 ---
 
-## CLI Reference
+## Installation
 
-The CLI wrapper integrates all features into standard developer commands:
+Install the CLI globally:
+```bash
+npm install -g @solana-epic/cli
+```
 
-*   `epic audit [path]`: Scans the workspace for security vulnerabilities (EPIC-SEC-001 to 005) and reports findings in `text`, `json`, or `sarif` formats.
-*   `epic check <old_path> <new_path>`: Validates upgrade compatibility between two versions of a program folder.
-*   `epic rules`: Lists all registered security rules and their metadata.
-*   `epic explain <rule_id>`: Explains a rule, its threat model, vulnerable patterns, and safe alternatives.
+Verify your installation:
+```bash
+epic rules
+```
 
 ---
 
-## SARIF & GitHub Code Scanning
+## Quick Start
 
-EPIC fully supports the Static Analysis Results Interchange Format (SARIF) JSON schema. You can integrate `epic audit -f sarif` into your GitHub Actions workflow to upload findings directly to the **GitHub Code Scanning** dashboard, rendering security warnings inline with your pull request diffs.
+### 1. Run a Security Scan
+Scan your active directory for vulnerabilities:
+```bash
+epic audit .
+```
 
+### 2. Verify Upgrade Safety
+Compare a previous commit/version against your new modifications:
+```bash
+epic check ./old_program_dir ./new_program_dir
+```
+
+### 3. Integrate with GitHub PRs (CI/CD)
+EPIC fully supports the Static Analysis Results Interchange Format (SARIF) JSON schema. Add this step to your GitHub Actions workflow:
 ```yaml
 - name: Run EPIC Security Audit
   run: npx @solana-epic/cli audit . -f sarif
@@ -79,40 +109,50 @@ EPIC fully supports the Static Analysis Results Interchange Format (SARIF) JSON 
 
 ---
 
-## Real World Validation
+## Security Rules
 
-EPIC has been validated against major production Solana codebases, executing scans with zero crashes and successfully proving layout and instruction safety properties on:
-*   **Drift-v2**
-*   **Marginfi**
-*   **Kamino**
-*   **Squads-v4**
-*   **Metaplex (mpl-token-metadata)**
+EPIC parses Rust source code directly to enforce the following security invariants:
+
+| Rule ID | Name | Severity | Description |
+| :--- | :--- | :--- | :--- |
+| **EPIC-SEC-001** | Owner Validation | Critical | Ensures mutable account write paths are guarded by ownership checks (`account.owner == program_id`). |
+| **EPIC-SEC-002** | Signer Validation | Critical | Verifies privileged mutations check signer authority. |
+| **EPIC-SEC-003** | Missing Post-CPI Reload | Critical | Flags reads/writes on stale deserialized state cached before a mutating CPI. |
+| **EPIC-SEC-004** | PDA Seed Collision Risk | High | Identifies adjacent variable-length seeds lacking delimiters that could cause derivation collision. |
+| **EPIC-SEC-005** | Arbitrary CPI Targets | Critical | Flags CPIs targeting dynamic program IDs without validations. |
+
+To understand a finding in detail, run:
+```bash
+epic explain EPIC-SEC-001
+```
+
+---
+
+## Architecture Overview
+
+EPIC compiles Solana Rust ASTs directly into control-flow models and evaluates security invariants across the following unified pipeline:
+```
+Source Code ➔ Rust AST Parser ➔ Type Registry ➔ CFG Builder ➔ SSA Engine ➔ Dominance Tree ➔ GuardFacts IR ➔ Rules Analyzer
+```
+For a deep dive into the compiler and engine architecture, see [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Roadmap
+
+*   **Additional security rules**: Expanding invariant check coverage (EPIC-SEC-006+).
+*   **IDL-aware upgrade analysis**: Compare layouts via IDL definitions.
+*   **LSP integration**: Real-time editor diagnostics.
+*   **Automated remediation**: Suggesting safe code replacements for audit findings.
 
 ---
 
 ## Contributing
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/akxh5/Solana-EPIC.git
-    cd Solana-EPIC
-    npm install
-    ```
-2.  Build Rust and TypeScript packages:
-    ```bash
-    cd packages/parser-v2
-    cargo build --release
-    cd ../cli
-    npm run build
-    ```
-3.  Run unit and integration tests:
-    ```bash
-    cd ../parser-v2
-    cargo test
-    ```
+We welcome contributions to EPIC! See [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, package structure, and submission guidelines.
 
 ---
 
 ## License
 
-EPIC is open-source developer tooling licensed under the **MIT License**.
+EPIC is open-source developer tooling licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
