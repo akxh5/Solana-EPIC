@@ -4,6 +4,34 @@ All notable changes to the EPIC project will be documented in this file. This pr
 
 ---
 
+## [0.1.0-beta.2] - 2026-06-25
+
+This release transforms the EPIC CLI from a static analyzer into a premium, interactive, and educational security workflow.
+
+### Added
+*   **Intelligent CLI Workflow**: `epic audit` now groups findings intelligently, displays occurrence metrics, and dynamically generates actionable Next Steps based on audit priority.
+*   **Rule Knowledge Engine**: Embeds rich historical context, actionable fixes, and conceptual explanations into findings directly inside the terminal.
+*   **Diagnostics Mode**: Added `epic doctor` to automatically verify system environment dependencies (Rust, Cargo, Node.js, Configuration, Workspace structure).
+*   **Explanation Mode**: Added `epic explain <rule_id>` for on-demand deep-dive rule education containing severity mapping, threat models, safe/unsafe examples, and historical vulnerabilities.
+*   **Smart Security Score**: The audit summary now calculates a dynamic `Security Score` spanning confidence bands (`Production Ready`, `Minor Issues`, `Needs Review`, `High Risk`, `Unsafe For Deployment`).
+
+### Changed
+*   **Terminal Aesthetics**: Replaced the large ASCII banner with a highly polished typography-driven header. Extensively utilized `bold`, `dim`, `cyan`, and precise alignments for a Cargo/Rust analyzer-like premium feel.
+*   **Repository Filtering**: Improved parsing logic to automatically ignore test suites, `.git`, `node_modules`, `vendor`, and `fixtures` by default to ensure only production logic affects security scores. Added overrides (`--include-tests`, `--all`).
+*   **Publish Pipeline**: Overhauled `scripts/publish.sh` to enforce real `npm publish`, integrate interactive 2FA prompt support, verify real-time registry deployments, and implement a `--from` resume flag.
+
+### Developer Experience
+*   **Execution Metrics**: Added detailed elapsed timing visualizations dividing processing across AST Build, Call Graph extraction, Rule Execution, and Rendering.
+*   **Repository Overview**: Generates a fast breakdown of parsed code blocks (Rust Files, Instructions, Accounts, CPIs, PDAs, Programs) prior to rule execution.
+*   **Contextual Hints**: Introduced dynamically rolling tips at the end of execution to improve command discovery (e.g., using `--markdown`).
+*   **Output Modes**: Expanded `--format` support providing clean JSON output for programmatic ingestion and Markdown rendering for PR comments.
+
+### Fixed
+*   **Release Pipeline Simulator Flaw**: Replaced the mock npm publisher (`mock-npm.sh`) with strict production npm registry calls.
+*   **Finding Noise**: Resolved issues where dummy test cases would artificially deflate the overall security score of the project.
+
+---
+
 ## [0.1.0-beta.1] - 2026-06-18
 
 This is the initial public beta release of the Engineering Platform for Intelligent Contracts (EPIC), providing deterministic state layout verification and ABI compatibility audits for Solana program upgrades.

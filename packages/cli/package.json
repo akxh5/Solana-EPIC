@@ -53,5 +53,6 @@
     "upgrade-safety",
     "rust"
   ],
-  "author": "Solana EPIC Team"
+  "author": "Solana EPIC Team",
+  "description": "EPIC Security CLI for Solana programs"
 }

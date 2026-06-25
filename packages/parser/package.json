@@ -49,5 +49,6 @@
     "upgrade-safety",
     "rust"
   ],
-  "author": "Solana EPIC Team"
+  "author": "Solana EPIC Team",
+  "description": "EPIC AST Parser for Anchor projects"
 }

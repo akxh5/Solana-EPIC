@@ -46,5 +46,6 @@
     "upgrade-safety",
     "rust"
   ],
-  "author": "Solana EPIC Team"
+  "author": "Solana EPIC Team",
+  "description": "EPIC Layout Diff Engine for ABI verification"
 }
