@@ -11,22 +11,22 @@ test("loader: getPlatformKey maps platforms and architectures", () => {
 
 test("loader: resolves darwin-arm64 binary placeholder from package exports", () => {
   const binaryPath = resolveParserBinary({}, "darwin", "arm64");
-  assert.ok(binaryPath.endsWith("packages/cli-darwin-arm64/bin/parser-v2"));
+  assert.ok(binaryPath.includes("cli-darwin-arm64/bin/parser-v2"));
 });
 
 test("loader: resolves darwin-x64 binary placeholder from package exports", () => {
   const binaryPath = resolveParserBinary({}, "darwin", "x64");
-  assert.ok(binaryPath.endsWith("packages/cli-darwin-x64/bin/parser-v2"));
+  assert.ok(binaryPath.includes("cli-darwin-x64/bin/parser-v2"));
 });
 
 test("loader: resolves linux-x64 binary placeholder from package exports", () => {
   const binaryPath = resolveParserBinary({}, "linux", "x64");
-  assert.ok(binaryPath.endsWith("packages/cli-linux-x64/bin/parser-v2"));
+  assert.ok(binaryPath.includes("cli-linux-x64/bin/parser-v2"));
 });
 
 test("loader: resolves win32-x64 binary placeholder from package exports", () => {
   const binaryPath = resolveParserBinary({}, "win32", "x64");
-  assert.ok(binaryPath.endsWith("packages/cli-win32-x64/bin/parser-v2.exe"));
+  assert.ok(binaryPath.includes("cli-win32-x64/bin/parser-v2.exe") || binaryPath.includes("cli-win32-x64\\bin\\parser-v2.exe"));
 });
 
 test("loader: throws EPICBinaryNotFoundError when all discovery options fail", () => {

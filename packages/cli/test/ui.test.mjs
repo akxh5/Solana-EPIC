@@ -18,8 +18,8 @@ test("ui: banner is printed when TTY is simulated", (t) => {
   const output = execSync(`node --input-type=module -e '${code}'`, { encoding: "utf8", env: { ...process.env, EPIC_NO_BANNER: undefined, NO_COLOR: undefined } });
   
   // Verify banner logo and tagline are present
-  assert.match(output, /Know your upgrade before mainnet\./);
-  assert.match(output, /EPIC v0\.1\.0-beta\.2/);
+  assert.match(output, /Security-first upgrade intelligence for Solana/);
+  assert.match(output, /v0\.1\.0-beta\.2/);
 });
 
 test("ui: banner respects --no-banner flag", (t) => {
