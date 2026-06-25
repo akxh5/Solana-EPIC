@@ -10,13 +10,16 @@ const isColorsEnabled = () => {
 export const colors = {
   gold: (text: string) => isColorsEnabled() ? `\x1b[38;2;214;185;140m${text}\x1b[0m` : text,
   ivory: (text: string) => isColorsEnabled() ? `\x1b[38;2;244;239;230m${text}\x1b[0m` : text,
-  gray: (text: string) => isColorsEnabled() ? `\x1b[38;2;156;163;175m${text}\x1b[0m` : text, // Soft gray
+  gray: (text: string) => isColorsEnabled() ? `\x1b[38;2;156;163;175m${text}\x1b[0m` : text,
   graphite: (text: string) => isColorsEnabled() ? `\x1b[38;2;58;58;58m${text}\x1b[0m` : text,
   success: (text: string) => isColorsEnabled() ? `\x1b[38;2;74;222;128m${text}\x1b[0m` : text,
   warning: (text: string) => isColorsEnabled() ? `\x1b[38;2;251;191;36m${text}\x1b[0m` : text,
   critical: (text: string) => isColorsEnabled() ? `\x1b[38;2;239;68;68m${text}\x1b[0m` : text,
+  info: (text: string) => isColorsEnabled() ? `\x1b[38;2;59;130;246m${text}\x1b[0m` : text,
   violet: (text: string) => isColorsEnabled() ? `\x1b[38;2;139;92;246m${text}\x1b[0m` : text,
 };
+
+export const DIVIDER = "────────────────────────────────────────";
 
 let bannerPrinted = false;
 
@@ -43,9 +46,16 @@ export const printBanner = (noBannerFlag: boolean = false) => {
   console.log(colors.gold(logo.substring(1))); 
   console.log(colors.ivory("EPIC v0.1.0-beta.2"));
   console.log(colors.gray("Know your upgrade before mainnet."));
-  console.log(colors.graphite("───────────────────────────────────────────────────────────"));
+  console.log(colors.graphite(DIVIDER));
 
   bannerPrinted = true;
+};
+
+export const printFinalSignature = () => {
+  if (!process.stdout.isTTY || process.env.EPIC_NO_BANNER === "1") return;
+  console.log(colors.graphite(DIVIDER));
+  console.log(colors.gold("EPIC v0.1.0-beta.2"));
+  console.log(colors.gray("Know your upgrade before mainnet."));
 };
 
 export const printInitSequence = (steps: string[]) => {
@@ -58,18 +68,20 @@ export const printInitSequence = (steps: string[]) => {
 
 export const printSection = (title: string, data: Record<string, string | number>) => {
   console.log(colors.ivory(title));
-  console.log(colors.graphite("────────────────────────"));
+  console.log(colors.graphite(DIVIDER));
   for (const [key, value] of Object.entries(data)) {
-    console.log(`${key.padEnd(12)} ${value}`);
+    console.log(`${key.padEnd(19)} ${value}`);
   }
   console.log("");
 };
 
 export const formatSeverity = (sev: string) => {
   const s = sev.toUpperCase();
-  if (s === "CRITICAL" || s === "HIGH") return colors.critical(s);
+  if (s === "CRITICAL") return colors.critical(s);
+  if (s === "HIGH") return colors.warning(s);
   if (s === "MAJOR" || s === "MEDIUM") return colors.warning(s);
   if (s === "WARNING") return colors.warning(s);
+  if (s === "INFO") return colors.info(s);
   if (s === "SAFE" || s === "MINOR") return colors.success(s);
   return s;
 };
@@ -87,11 +99,12 @@ export const printRuleFinding = (finding: any) => {
   const ruleId = colors.violet(finding.rule_id);
   const ruleName = finding.rule_name || ruleNames[finding.rule_id] || finding.rule_id;
   
-  console.log(`${sev.padEnd(isColorsEnabled() ? 19 : 10)} ${ruleId}`);
+  console.log(sev);
+  console.log(ruleId);
   console.log(colors.ivory(ruleName));
   console.log(colors.gray("Location"));
   console.log(`${finding.location.file}:${finding.location.line}`);
   console.log(colors.gray("Recommendation"));
   console.log(finding.message);
-  console.log("");
+  console.log(colors.graphite(DIVIDER));
 };
