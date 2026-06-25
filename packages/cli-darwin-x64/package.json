@@ -1,6 +1,6 @@
 {
   "name": "@solana-epic/cli-darwin-x64",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Prebuilt darwin-x64 binary of parser-v2 for EPIC CLI",
   "private": false,
   "publishConfig": {

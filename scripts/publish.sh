@@ -45,7 +45,8 @@ publish() {
   
   cd - > /dev/null
   
-  echo "✓ Published @solana-epic/${pkg_name}@0.1.0-beta.2"
+  local pkg_version=$(node -p "require('./package.json').version")
+  echo "✓ Published @solana-epic/${pkg_name}@${pkg_version}"
   
   local version
   # npm view might take a moment to sync on public registry, but we check immediately as requested
@@ -87,4 +88,5 @@ npm dist-tag ls @solana-epic/cli
 echo "CLI Registry Version:"
 npm view @solana-epic/cli version
 echo ""
-echo "All packages published successfully! EPIC v0.1.0-beta.2 is now live."
+pkg_version=$(node -p "require('./package.json').version")
+echo "All packages published successfully! EPIC v${pkg_version} is now live."

@@ -77,11 +77,19 @@ $ epic doctor
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Environment Diagnostics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✓ Rust Installed
-✓ Cargo
-✓ Node.js
-✓ Workspace Detected
-✓ Security Rules Loaded
+
+✓ Rust      : rustc 1.89.0
+✓ Cargo     : cargo 1.89.0
+✓ Node.js   : v24.7.0
+✓ Solana    : solana-cli 2.2.12
+✓ Anchor    : anchor-cli 0.31.1
+
+✓ parser-v2 : /usr/local/bin/parser-v2
+✓ Workspace : Anchor Workspace detected
+✓ Config    : Loaded epic.toml successfully
+✓ Rules     : 5 safety rules loaded
+
+Ready for Audit
 ```
 ---
 
@@ -127,6 +135,33 @@ Incorporate upgrade checks directly into your pull requests. EPIC supports stand
 
 ---
 
+## Configuration (`epic.toml`)
+
+Customize EPIC's behavior by placing an `epic.toml` file in your workspace root.
+
+```toml
+[epic]
+fail_on_severity = "CRITICAL"
+
+[epic.rules]
+ignore = [
+    "EPIC-SEC-004" # Disable specific rules
+]
+```
+
+---
+
+## JSON / SARIF Output
+
+For advanced integrations, EPIC can output findings in structured JSON or SARIF formats:
+```bash
+epic audit . --format json > epic-report.json
+epic audit . --format sarif > epic-report.sarif
+```
+This is ideal for piping output into custom dashboard analytics or enterprise SIEM platforms.
+
+---
+
 ## Safety Invariant Rules
 
 EPIC parses Rust source code directly to ensure upgrade changes do not break safety invariants:
@@ -158,9 +193,18 @@ For a deep dive into the compiler and engine architecture, see [docs/architectur
 
 ## Roadmap
 
-*   **IDL-based layout drift verification**: Track compatibility profiles directly via published IDLs.
-*   **Editor LSP integration**: Real-time IDE diagnostics for layout drift and offset alignment.
-*   **Migration assistance**: Automatically generate Anchor state migration wrappers.
+For detailed upcoming features including LSP integration, IDL drift verification, and automatic migration wrappers, view our [Official Roadmap](docs/roadmap.md).
+
+---
+
+## Documentation Reference
+
+Explore our detailed technical guides in the `docs/` directory:
+* [CLI Reference](docs/cli-reference.md): Complete list of commands and flags.
+* [Configuration](docs/configuration.md): Guide to setting up `epic.toml`.
+* [Security Rules](docs/security-rules.md): In-depth explanations of EPIC's safety invariants.
+* [Upgrade Safety](docs/upgrade-safety.md): Best practices for managing state drift.
+* [Architecture Overview](docs/architecture.md): Internal compiler design and graph engine.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "@solana-epic/cli",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -21,15 +21,15 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@solana-epic/diff-engine": "^0.1.0-beta.2",
-    "@solana-epic/parser": "^0.1.0-beta.2",
+    "@solana-epic/diff-engine": "^0.1.0-beta.3",
+    "@solana-epic/parser": "^0.1.0-beta.3",
     "commander": "^14.0.0"
   },
   "optionalDependencies": {
-    "@solana-epic/cli-darwin-arm64": "^0.1.0-beta.2",
-    "@solana-epic/cli-darwin-x64": "^0.1.0-beta.2",
-    "@solana-epic/cli-linux-x64": "^0.1.0-beta.2",
-    "@solana-epic/cli-win32-x64": "^0.1.0-beta.2"
+    "@solana-epic/cli-darwin-arm64": "^0.1.0-beta.3",
+    "@solana-epic/cli-darwin-x64": "^0.1.0-beta.3",
+    "@solana-epic/cli-linux-x64": "^0.1.0-beta.3",
+    "@solana-epic/cli-win32-x64": "^0.1.0-beta.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",

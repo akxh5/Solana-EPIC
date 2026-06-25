@@ -6,7 +6,7 @@ This report compares **Google Antigravity EPIC** against the community standard 
 
 ## Comparison Matrix
 
-| Metric / Dimension | Anchor Sentinel (v0.5.0) | Google Antigravity EPIC (0.4.0) |
+| Metric / Dimension | Anchor Sentinel (v0.5.0) | Google Antigravity EPIC (0.1.0-beta.3) |
 | :--- | :--- | :--- |
 | **Dependency Requirements** | High. Requires `Anchor.toml` and compiled `target/idl/*.json` build outputs. | Low. Scans raw Rust AST directly, compiling CFGs without build outputs. |
 | **Robustness / Crash Risk** | **Critical Failure**. Crashes on standard v30/v31 IDLs due to a deserializer type mismatch. | High. Unified `ProgramIr` normalizes legacy and modern IDLs safely. |

@@ -1,6 +1,6 @@
 {
   "name": "@solana-epic/diff-engine",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -23,7 +23,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@solana-epic/parser": "^0.1.0-beta.2"
+    "@solana-epic/parser": "^0.1.0-beta.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.29"

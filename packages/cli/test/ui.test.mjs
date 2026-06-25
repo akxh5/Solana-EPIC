@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.resolve(__dirname, "./dist/index.js");
 
-test("ui: banner is printed when TTY is simulated", (t) => {
+test("ui: banner is printed when TTY is simulated", async (t) => {
   // To simulate TTY, we could run node with a pseudo-tty, but it's simpler to test the env var logic 
   // or test the UI module directly. But since the requirement is to snapshot the CLI, let's test the ui module directly.
   const code = `
@@ -17,9 +17,11 @@ test("ui: banner is printed when TTY is simulated", (t) => {
   `;
   const output = execSync(`node --input-type=module -e '${code}'`, { encoding: "utf8", env: { ...process.env, EPIC_NO_BANNER: undefined, NO_COLOR: undefined } });
   
+  const pkg = await import("../package.json", { with: { type: "json" } });
+  
   // Verify banner logo and tagline are present
   assert.match(output, /Security-first upgrade intelligence for Solana/);
-  assert.match(output, /v0\.1\.0-beta\.2/);
+  assert.ok(output.includes(`v${pkg.default.version}`));
 });
 
 test("ui: banner respects --no-banner flag", (t) => {

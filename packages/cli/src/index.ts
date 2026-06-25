@@ -8,11 +8,12 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
 const program = new Command();
+import { CLI_VERSION } from "./version.js";
 
 program
   .name("epic")
   .description("EPIC CLI for Solana Upgrade Intelligence (powered by parser-v2 Rust AST engine).")
-  .version("0.1.0-beta.2")
+  .version(CLI_VERSION)
   .option("--no-banner", "Disable the startup banner");
 
 import { resolveParserBinary } from "./loader.js";
@@ -188,25 +189,74 @@ program
     console.log(colors.gray(DIVIDER));
     console.log("");
 
-    
-    const checkCommand = (cmd: string, name: string) => {
+    let hasErrors = false;
+
+    const checkVersion = (cmd: string, name: string, required: boolean) => {
       try {
-        execSync(cmd, { stdio: "ignore" });
-        console.log(`${colors.success("✓")} ${name}`);
+        const out = execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+        const shortVer = out.split("\n")[0].substring(0, 50);
+        console.log(`${colors.success("✓")} ${name.padEnd(10)}: ${colors.dim(shortVer)}`);
       } catch (e) {
-        console.log(`${colors.critical("✖")} ${name} (Not found)`);
+        if (required) {
+          console.log(`${colors.critical("✖")} ${name.padEnd(10)}: ${colors.critical("Not found (Required)")}`);
+          hasErrors = true;
+        } else {
+          console.log(`${colors.warning("⚠️")} ${name.padEnd(10)}: ${colors.dim("Not found (Optional)")}`);
+        }
       }
     };
     
-    checkCommand("rustc --version", "Rust Installed");
-    checkCommand("cargo --version", "Cargo");
-    checkCommand("node --version", "Node.js");
+    checkVersion("rustc --version", "Rust", true);
+    checkVersion("cargo --version", "Cargo", true);
+    checkVersion("node --version", "Node.js", true);
+    checkVersion("solana --version", "Solana", false);
+    checkVersion("anchor --version", "Anchor", false);
     
-    console.log(`${colors.success("✓")} EPIC Config`);
-    console.log(`${colors.success("✓")} Workspace Detected`);
-    console.log(`${colors.success("✓")} Security Rules Loaded`);
     console.log("");
-    console.log(colors.success("Ready for Audit"));
+
+    try {
+      const binaryPath = resolveParserBinary();
+      fs.accessSync(binaryPath, fs.constants.X_OK);
+      console.log(`${colors.success("✓")} parser-v2 : ${colors.dim(binaryPath)}`);
+    } catch (e: any) {
+      console.log(`${colors.critical("✖")} parser-v2 : ${colors.critical("Binary not found or not executable")}`);
+      hasErrors = true;
+    }
+
+    const hasAnchor = fs.existsSync(path.join(process.cwd(), "Anchor.toml"));
+    const hasCargo = fs.existsSync(path.join(process.cwd(), "Cargo.toml"));
+    if (hasAnchor) {
+      console.log(`${colors.success("✓")} Workspace : ${colors.dim("Anchor Workspace detected")}`);
+    } else if (hasCargo) {
+      console.log(`${colors.success("✓")} Workspace : ${colors.dim("Cargo Workspace detected")}`);
+    } else {
+      console.log(`${colors.warning("⚠️")} Workspace : ${colors.warning("No Anchor.toml or Cargo.toml found in current directory")}`);
+    }
+
+    const hasEpicToml = fs.existsSync(path.join(process.cwd(), "epic.toml"));
+    if (hasEpicToml) {
+      try {
+        config.loadEpicConfig();
+        console.log(`${colors.success("✓")} Config    : ${colors.dim("Loaded epic.toml successfully")}`);
+      } catch(e: any) {
+        console.log(`${colors.critical("✖")} Config    : ${colors.critical("Invalid epic.toml: " + e.message)}`);
+        hasErrors = true;
+      }
+    } else {
+      console.log(`${colors.success("✓")} Config    : ${colors.dim("Using default configuration")}`);
+    }
+
+    const ruleCount = Object.keys(ruleKnowledge).length;
+    console.log(`${colors.success("✓")} Rules     : ${colors.dim(`${ruleCount} safety rules loaded`)}`);
+
+    console.log("");
+    if (hasErrors) {
+      console.log(colors.critical("Diagnostics failed. EPIC may not function correctly."));
+      process.exit(1);
+    } else {
+      console.log(colors.success("Ready for Audit"));
+      process.exit(0);
+    }
   });
 
 program
@@ -453,7 +503,7 @@ program.configureHelp({
     return `
 ${colors.bold(colors.white("EPIC"))}
 ${colors.dim("Security-first upgrade intelligence for Solana")}
-${colors.cyan("v0.1.0-beta.2")}
+${colors.cyan("v" + CLI_VERSION)}
 
 ${colors.bold("Commands")}
   ${colors.white("audit".padEnd(14))} Run security rules against the repository.
