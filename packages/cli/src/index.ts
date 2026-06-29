@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { compareAnchorPrograms, formatHumanReport } from "@solana-epic/diff-engine";
+import { compareAnchorPrograms, createUpgradeIntelligence } from "@solana-epic/diff-engine";
 import { config } from "@solana-epic/parser";
 import { spawnSync, execSync } from "node:child_process";
 import path from "node:path";
@@ -17,7 +17,38 @@ program
   .option("--no-banner", "Disable the startup banner");
 
 import { resolveParserBinary } from "./loader.js";
-import { printBanner, printInitSequence, printSection, printRuleFinding, colors, formatSeverity, printEndSummary, DIVIDER, ruleKnowledge } from "./ui.js";
+import { printStartup, printInitSequence, printSection, printRuleFinding, colors, formatSeverity, printEndSummary, printUpgradeReport, severityBadge, scoreBar, bandForScore, scoreForFinding, DIVIDER, ruleKnowledge } from "./ui.js";
+import { generateSarif, generateMarkdown } from "./reports.js";
+
+// Count Rust source files under a path (real, not fabricated metrics).
+function countRustFiles(target: string): number {
+  let count = 0;
+  const skip = new Set([".git", "target", "node_modules", "vendor"]);
+  const walk = (dir: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (skip.has(entry.name)) continue;
+        walk(path.join(dir, entry.name));
+      } else if (entry.isFile() && entry.name.endsWith(".rs")) {
+        count++;
+      }
+    }
+  };
+  try {
+    const stat = fs.statSync(target);
+    if (stat.isFile()) return target.endsWith(".rs") ? 1 : 0;
+  } catch {
+    return 0;
+  }
+  walk(target);
+  return count;
+}
 
 function findRustBinary(): string {
   try {
@@ -36,8 +67,8 @@ program
     const startTime = Date.now();
     try {
       const opts = program.opts();
-      printBanner(!opts.banner);
-      
+      printStartup("Workspace Analysis", !opts.banner);
+
       printInitSequence([
         "Rust AST Loaded",
         "Parsing Anchor Workspace",
@@ -47,7 +78,7 @@ program
 
       const binary = findRustBinary();
       const resolvedPath = path.resolve(targetPath);
-      
+
       const result = spawnSync(binary, [resolvedPath], { encoding: "utf-8" });
       
       if (result.error) {
@@ -107,7 +138,7 @@ program
     const startTime = Date.now();
     try {
       const opts = program.opts();
-      printBanner(!opts.banner);
+      const startupShown = printStartup("Upgrade Intelligence", !opts.banner);
 
       printInitSequence([
         "Rust AST Loaded",
@@ -129,7 +160,10 @@ program
 
       const report = await compareAnchorPrograms(resolvedOldPath, resolvedNewPath, epicConfig);
 
-      console.log(formatHumanReport(report));
+      const intelligence = createUpgradeIntelligence(report);
+      const programName = report.findings[0]?.account || path.basename(resolvedNewPath);
+      printUpgradeReport(report, intelligence, { program: programName }, { skipTitle: startupShown });
+      console.log("");
 
       const severityOrder = ["SAFE", "MINOR", "WARNING", "MAJOR", "CRITICAL"];
       const thresholdIndex = severityOrder.indexOf(epicConfig.failOnSeverity);
@@ -167,27 +201,18 @@ function getSeverityLevel(sev: string): number {
   return 3;
 }
 
-function generateSarif(findings: any[]): any {
-  const results = findings.map((f) => ({
-    ruleId: f.rule_id,
-    level: "warning",
-    message: { text: f.message },
-    locations: [{ physicalLocation: { artifactLocation: { uri: f.location.file }, region: { startLine: f.location.line } } }]
-  }));
-  return {
-    version: "2.1.0",
-    runs: [{ tool: { driver: { name: "EPIC", rules: [] } }, results }]
-  };
-}
-
 program
   .command("doctor")
   .description("Run diagnostics on the environment")
   .action(() => {
-    console.log(colors.gray(DIVIDER));
-    console.log(colors.bold(colors.white("Environment Diagnostics")));
-    console.log(colors.gray(DIVIDER));
-    console.log("");
+    const opts = program.opts();
+    const startupShown = printStartup("Environment Diagnostics", !opts.banner);
+    if (!startupShown) {
+      console.log(colors.gray(DIVIDER));
+      console.log(colors.bold(colors.white("Environment Diagnostics")));
+      console.log(colors.gray(DIVIDER));
+      console.log("");
+    }
 
     let hasErrors = false;
 
@@ -263,27 +288,35 @@ program
   .command("explain <rule_id>")
   .description("Explain a security rule in detail")
   .action((ruleId: string) => {
+    const opts = program.opts();
+    printStartup("Rule Explanation", !opts.banner);
+
     const knowledge = ruleKnowledge[ruleId];
     if (!knowledge) {
       console.log(colors.critical(`Rule ${ruleId} not found.`));
+      console.log(colors.dim("Run 'epic rules' to list all available rules."));
       process.exit(1);
     }
-    console.log(colors.gray(DIVIDER));
-    console.log(colors.bold(colors.white("Rule")));
-    console.log(colors.cyan(knowledge.desc));
-    console.log("");
-    console.log(colors.bold(colors.white("Severity")));
-    console.log(colors.critical("Critical / High"));
+    const band = bandForScore(knowledge.score);
     console.log(colors.gray(DIVIDER));
     console.log("");
-    console.log(colors.bold(colors.white("Historical Exploits")));
-    console.log(colors.dim(knowledge.historical));
+    console.log(`${severityBadge(band)}  ${colors.white(ruleId)}  ${colors.gray("·")}  ${colors.white(knowledge.desc)}`);
     console.log("");
-    console.log(colors.bold(colors.white("Suggested Fix")));
-    console.log(colors.dim(knowledge.fix));
+    console.log(`${colors.dim("Risk Score")}   ${scoreBar(knowledge.score)}  ${colors.white(`${knowledge.score} / 100`)}`);
     console.log("");
-    console.log(colors.bold(colors.white("Why this matters")));
+    console.log(colors.gray(DIVIDER));
+    console.log("");
+    console.log(colors.bold(colors.white("WHY IT'S DANGEROUS")));
     console.log(colors.dim(knowledge.why));
+    console.log("");
+    console.log(colors.bold(colors.white("WHAT BREAKS")));
+    console.log(colors.warning(knowledge.impact));
+    console.log("");
+    console.log(colors.bold(colors.white("HOW TO FIX")));
+    console.log(colors.green(knowledge.fix));
+    console.log("");
+    console.log(colors.bold(colors.white("HISTORICAL EXPLOITS")));
+    console.log(colors.dim(knowledge.historical));
     console.log("");
     console.log(colors.gray(DIVIDER));
     console.log("");
@@ -304,11 +337,13 @@ program
     const startTime = Date.now();
     try {
       const opts = program.opts();
-      if (options.format === "text") printBanner(!opts.banner);
+      if (options.format === "text") printStartup("Security Audit", !opts.banner);
 
       const binary = findRustBinary();
       const resolvedPath = path.resolve(targetPath);
+      const auditStart = Date.now();
       const result = spawnSync(binary, ["audit", resolvedPath], { encoding: "utf-8" });
+      const ruleEngineMs = Date.now() - auditStart;
       if (result.status !== 0) throw new Error("Parser failed");
       const findings = JSON.parse(result.stdout.trim());
 
@@ -328,33 +363,45 @@ program
       });
 
       if (options.format === "text") {
-        const fileCount = activeFindings.length > 0 ? 182 : 45;
+        // Real repository structure from the parser's analyze pass + filesystem.
+        const fileCount = countRustFiles(resolvedPath);
+        let structsFound = 0, enumsFound = 0, accountsFound = 0;
+        let analyzeMs = 0;
+        try {
+          const analyzeStart = Date.now();
+          const analyzeResult = spawnSync(binary, [resolvedPath], { encoding: "utf-8" });
+          analyzeMs = Date.now() - analyzeStart;
+          if (analyzeResult.status === 0 && analyzeResult.stdout) {
+            const overview = JSON.parse(analyzeResult.stdout.trim());
+            structsFound = overview.structs_found ?? 0;
+            enumsFound = overview.enums_found ?? 0;
+            accountsFound = Array.isArray(overview.accounts) ? overview.accounts.length : 0;
+          }
+        } catch {
+          // Analyze enrichment is best-effort; the audit result is authoritative.
+        }
         const totalTimeMs = Date.now() - startTime;
-        
+
         printInitSequence([
           `Scanning Files\n${colors.cyan("█████████████████████████")} ${colors.dim(`${fileCount} / ${fileCount}`)}`,
           `Building AST\n${colors.cyan("█████████████████████████")} ${colors.dim("100%")}`,
           `Running Security Rules\n${colors.cyan("█████████████████████████")} ${colors.dim("100%")}`
         ]);
         console.log("");
-        
+
         const projName = path.basename(resolvedPath) || ".";
 
         printSection("Workspace", {
           "Project": projName,
-          "Rust Version": "1.88.0",
-          "Anchor": "0.31",
-          "Rules Loaded": 5,
+          "Rules Loaded": Object.keys(ruleKnowledge).length,
           "Configuration": options.config || "epic.toml"
         });
-        
+
         printSection("Repository Overview", {
           "Rust Files": fileCount,
-          "Instructions": Math.round(fileCount * 0.35),
-          "Accounts": Math.round(fileCount * 0.95),
-          "CPIs": Math.round(fileCount * 0.28),
-          "PDAs": Math.round(fileCount * 0.22),
-          "Anchor Programs": 1
+          "Structs": structsFound,
+          "Enums": enumsFound,
+          "State Accounts": accountsFound
         });
 
         const criticalCount = activeFindings.filter((f: any) => getSeverityLevel(f.severity) === 3).length;
@@ -363,10 +410,8 @@ program
 
         printSection("Execution Metrics", {
           "Indexed Files": fileCount,
-          "AST Build": `${Math.max(1, Math.round(totalTimeMs * 0.45))} ms`,
-          "Call Graph": `${Math.max(1, Math.round(totalTimeMs * 0.15))} ms`,
-          "Rule Engine": `${Math.max(1, Math.round(totalTimeMs * 0.35))} ms`,
-          "Rendering": `${Math.max(1, Math.round(totalTimeMs * 0.05))} ms`,
+          "Parse + AST": `${Math.max(1, analyzeMs)} ms`,
+          "Rule Engine": `${Math.max(1, ruleEngineMs)} ms`,
           "Total": `${(totalTimeMs / 1000).toFixed(2)} s`
         });
 
@@ -416,13 +461,10 @@ program
           const knowledge = ruleKnowledge[mostCommonRule];
           console.log(colors.bold(colors.white("Most Common Issue")));
           console.log(colors.dim(`${knowledge.desc}`));
-          console.log(colors.cyan(`${highestOccurrences} occurrences`));
-          console.log("");
-          console.log(colors.dim("Estimated Fix Time"));
-          console.log(colors.white("~25-40 minutes"));
+          console.log(colors.cyan(`${highestOccurrences} occurrence${highestOccurrences === 1 ? "" : "s"}`));
           console.log("");
           console.log(colors.dim("Priority"));
-          console.log(colors.white(`Resolve this rule before investigating other issues.`));
+          console.log(colors.white(`Resolve this rule first — it accounts for the most findings.`));
           console.log("");
         }
 
@@ -430,17 +472,12 @@ program
       } else if (options.format === "json") {
         console.log(JSON.stringify(activeFindings, null, 2));
       } else if (options.format === "sarif") {
-        // Implement SARIF if needed
+        console.log(JSON.stringify(generateSarif(activeFindings), null, 2));
       } else if (options.format === "markdown") {
-        console.log("# EPIC Security Report");
-        console.log(`Critical: ${activeFindings.filter((f: any) => getSeverityLevel(f.severity) === 3).length}`);
-        console.log(`High: ${activeFindings.filter((f: any) => getSeverityLevel(f.severity) < 3).length}`);
-        console.log("\n## Findings\n");
-        for (const finding of activeFindings) {
-          console.log(`### ${finding.rule_id}: ${finding.rule_name || finding.rule_id}`);
-          console.log(`**Location:** \`${finding.location.file}:${finding.location.line}\``);
-          console.log(`**Message:** ${finding.message}\n`);
-        }
+        console.log(generateMarkdown(activeFindings, {
+          project: path.basename(resolvedPath) || ".",
+          scanMs: Date.now() - startTime
+        }));
       }
 
       if (options.strict) {
@@ -475,26 +512,39 @@ program
   .command("rules")
   .description("List all available security rules.")
   .action(() => {
-    console.log("EPIC-SEC-001");
-    console.log("Owner Validation");
-    console.log("Critical");
-    console.log("Implemented\n");
-    console.log("EPIC-SEC-002");
-    console.log("Missing Signer Validation");
-    console.log("Critical");
-    console.log("Implemented\n");
-    console.log("EPIC-SEC-003");
-    console.log("Missing Post-CPI Account Reload");
-    console.log("Critical");
-    console.log("Implemented\n");
-    console.log("EPIC-SEC-004");
-    console.log("PDA Cryptographic Seed Collision Risk");
-    console.log("High");
-    console.log("Implemented\n");
-    console.log("EPIC-SEC-005");
-    console.log("Arbitrary CPI Target Program Spoofing");
-    console.log("Critical");
-    console.log("Implemented");
+    const opts = program.opts();
+    const startupShown = printStartup("Security Rules", !opts.banner);
+
+    const rules: Array<[string, string]> = [
+      ["EPIC-SEC-001", "Owner Validation"],
+      ["EPIC-SEC-002", "Missing Signer Validation"],
+      ["EPIC-SEC-003", "Missing Post-CPI Account Reload"],
+      ["EPIC-SEC-004", "PDA Cryptographic Seed Collision Risk"],
+      ["EPIC-SEC-005", "Arbitrary CPI Target Program Spoofing"]
+    ];
+
+    if (!startupShown) {
+      console.log(colors.gray(DIVIDER));
+      console.log(colors.white(colors.bold("EPIC Security Rules")));
+      console.log(colors.gray(DIVIDER));
+      console.log("");
+    }
+
+    for (const [id, name] of rules) {
+      const kb = ruleKnowledge[id];
+      const score = kb ? kb.score : 50;
+      const band = bandForScore(score);
+      console.log(`${severityBadge(band)}  ${colors.white(id)}  ${colors.gray("·")}  ${colors.white(name)}`);
+      if (kb) {
+        console.log(`   ${scoreBar(score, 16)}  ${colors.dim(`${score} / 100`)}  ${colors.gray("Implemented")}`);
+      } else {
+        console.log(`   ${colors.gray("Implemented")}`);
+      }
+      console.log("");
+    }
+
+    console.log(colors.dim("Run 'epic explain <RULE-ID>' for a full breakdown of any rule."));
+    console.log("");
   });
 
 

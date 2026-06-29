@@ -19,8 +19,8 @@ test("ui: banner is printed when TTY is simulated", async (t) => {
   
   const pkg = await import("../package.json", { with: { type: "json" } });
   
-  // Verify banner logo and tagline are present
-  assert.match(output, /Security-first upgrade intelligence for Solana/);
+  // Verify banner subtitle and version are present
+  assert.match(output, /Upgrade Intelligence for Solana/);
   assert.ok(output.includes(`v${pkg.default.version}`));
 });
 
