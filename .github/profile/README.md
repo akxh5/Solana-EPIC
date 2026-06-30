@@ -5,20 +5,20 @@
 
 ---
 
-EPIC is the deployment readiness and upgrade intelligence infrastructure for Solana programs. Positioned between git push and mainnet, EPIC evaluates account layout evolution, ABI compatibility, and security regressions before upgrades reach production.
+EPIC is the deployment safety layer for Solana. Positioned between git push and mainnet, EPIC evaluates account layout evolution, ABI compatibility, and security regressions before upgrades reach production.
 
 ## Why Upgrade Intelligence Matters
 
-Every Solana program upgrade is a high-risk mutation of mainnet state. While standard compiler tooling validates syntactic correctness, it cannot detect layout shifts, offset drifts, or missing cache reloads that corrupt existing account data.
+Your Solana upgrade compiled successfully. Tests pass. Audits pass. It is still about to corrupt every existing account. 
 
-Most protocol teams discover breaking layout changes and security regressions after deployment. EPIC provides the compile-time visibility needed to verify upgrade safety beforehand.
+Every Solana program upgrade is a high-risk migration. A minor type shift, field reordering, or missing state reload can corrupt deserialization layouts, lock user funds, and introduce severe security regressions. Most protocol teams discover breaking layout changes after deployment. EPIC answers a simple question before you ever sign a transaction: *"Can I safely deploy this?"*
 
 ## Core Capabilities
 
 *   **Upgrade Compatibility Checking**: Compare program versions to detect state layout drift, field reordering, type width changes, and Anchor discriminator shifts.
-*   **Account Evolution Metrics**: Analyze serialized account sizes, offset structures, and memory growth impact to manage state scaling.
-*   **Upgrade Safety Verification**: Audit safety constraints, signer checks, and post-CPI reload invariants introduced during upgrade changes.
-*   **Deployment Readiness Pipeline**: Integrate upgrade validation into CI/CD workflows to prevent breaking layouts from reaching mainnet.
+*   **Security Audit**: Verify safety constraints, signer checks, and post-CPI reload invariants introduced during upgrade changes.
+*   **Workspace Analysis**: Analyze serialized account sizes, offset structures, and memory growth impact to manage state scaling.
+*   **Deployment Readiness Pipeline**: Integrate upgrade validation into CI/CD workflows using the GitHub Action to prevent breaking layouts from reaching mainnet.
 
 ## Installation
 
