@@ -151,11 +151,8 @@ fn test_historical_upgrades_harness() {
     markdown_report.push_str(&case_details);
 
     // Save report to artifacts directory
-    let artifact_path = "/Users/aksh/.gemini/antigravity-cli/brain/771599f6-6fdd-4133-839e-6b8d5c19a5d3/validation_report.md";
-    fs::create_dir_all(
-        "/Users/aksh/.gemini/antigravity-cli/brain/771599f6-6fdd-4133-839e-6b8d5c19a5d3",
-    )
-    .unwrap();
+    let artifact_path = "target/validation_report.md";
+    fs::create_dir_all("target").unwrap();
     fs::write(artifact_path, markdown_report).unwrap();
 
     println!("==================================================");

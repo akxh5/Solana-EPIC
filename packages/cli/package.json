@@ -1,6 +1,6 @@
 {
   "name": "@solana-epic/cli",
-  "version": "0.1.0-beta.3",
+  "version": "0.2.0-beta.0",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -12,8 +12,8 @@
   "bin": {
     "epic": "./dist/index.js"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
@@ -21,15 +21,15 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@solana-epic/diff-engine": "^0.1.0-beta.3",
-    "@solana-epic/parser": "^0.1.0-beta.3",
+    "@solana-epic/diff-engine": "^0.2.0-beta.0",
+    "@solana-epic/parser": "^0.2.0-beta.0",
     "commander": "^14.0.0"
   },
   "optionalDependencies": {
-    "@solana-epic/cli-darwin-arm64": "^0.1.0-beta.3",
-    "@solana-epic/cli-darwin-x64": "^0.1.0-beta.3",
-    "@solana-epic/cli-linux-x64": "^0.1.0-beta.3",
-    "@solana-epic/cli-win32-x64": "^0.1.0-beta.3"
+    "@solana-epic/cli-darwin-arm64": "^0.2.0-beta.0",
+    "@solana-epic/cli-darwin-x64": "^0.2.0-beta.0",
+    "@solana-epic/cli-linux-x64": "^0.2.0-beta.0",
+    "@solana-epic/cli-win32-x64": "^0.2.0-beta.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",

@@ -1,6 +1,6 @@
 # EPIC Compiler Pipeline Architecture
 
-This document describes the compilation, analysis, and verification architecture of the Google Antigravity EPIC security engine.
+This document describes the compilation, analysis, and verification architecture of the EPIC security engine.
 
 ---
 

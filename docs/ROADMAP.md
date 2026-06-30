@@ -1,11 +1,11 @@
 # EPIC Roadmap
 
 ## v0.2.0 - CI/CD Integration
-- [ ] Markdown Reports
-- [ ] SARIF Output Integration
-- [ ] GitHub Actions Module
-- [ ] Security Baselines
-- [ ] Ignore Rules (`.epicignore`)
+- [x] Markdown Reports
+- [x] SARIF Output Integration
+- [x] GitHub Actions Module
+- [x] Security Baselines
+- [x] Ignore Rules (`epic.toml`)
 
 ## v0.3.0 - IDE Integration
 - [ ] VS Code Extension

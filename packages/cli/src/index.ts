@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { compareAnchorPrograms, createUpgradeIntelligence } from "@solana-epic/diff-engine";
+import { analyzePrograms, compareAccountLayouts, createUpgradeIntelligence, simulateCompatibility } from "@solana-epic/diff-engine";
 import { config } from "@solana-epic/parser";
 import { spawnSync, execSync } from "node:child_process";
 import path from "node:path";
@@ -17,7 +17,7 @@ program
   .option("--no-banner", "Disable the startup banner");
 
 import { resolveParserBinary } from "./loader.js";
-import { printStartup, printInitSequence, printSection, printRuleFinding, colors, formatSeverity, printEndSummary, printUpgradeReport, severityBadge, scoreBar, bandForScore, scoreForFinding, DIVIDER, ruleKnowledge } from "./ui.js";
+import { printStartup, getBannerString, printInitSequence, printSection, printRuleFinding, colors, formatSeverity, printEndSummary, printUpgradeReport, printCompatibilityReport, severityBadge, scoreBar, bandForScore, scoreForFinding, DIVIDER, ruleKnowledge } from "./ui.js";
 import { generateSarif, generateMarkdown } from "./reports.js";
 
 // Count Rust source files under a path (real, not fabricated metrics).
@@ -132,20 +132,24 @@ program
   .command("check")
   .description("Compare two Solana program workspace versions and report upgrade readiness.")
   .option("-c, --config <path>", "Path to epic.toml configuration file")
+  .option("-f, --format <format>", "Output format: text, json", "text")
   .argument("<old_path>", "Path to the old program version source directory")
   .argument("<new_path>", "Path to the new program version source directory")
-  .action(async (oldPath: string, newPath: string, options: { config?: string }) => {
+  .action(async (oldPath: string, newPath: string, options: { config?: string; format?: string }) => {
     const startTime = Date.now();
+    const isJson = options.format === "json";
     try {
       const opts = program.opts();
-      const startupShown = printStartup("Upgrade Intelligence", !opts.banner);
+      const startupShown = isJson ? false : printStartup("Upgrade Intelligence", !opts.banner);
 
-      printInitSequence([
-        "Rust AST Loaded",
-        "Parsing Anchor Workspace",
-        "Building Call Graph"
-      ]);
-      console.log("");
+      if (!isJson) {
+        printInitSequence([
+          "Rust AST Loaded",
+          "Parsing Anchor Workspace",
+          "Building Call Graph"
+        ]);
+        console.log("");
+      }
 
       const resolvedOldPath = path.resolve(oldPath);
       const resolvedNewPath = path.resolve(newPath);
@@ -158,33 +162,73 @@ program
         process.exit(1);
       }
 
-      const report = await compareAnchorPrograms(resolvedOldPath, resolvedNewPath, epicConfig);
-
+      // Parse both versions once, then run BOTH the compatibility simulator
+      // (state survival) and the existing layout-diff findings off the same AST.
+      const { oldProgram, newProgram } = await analyzePrograms(resolvedOldPath, resolvedNewPath, epicConfig);
+      const compatibility = simulateCompatibility(oldProgram, newProgram, epicConfig);
+      const report = compareAccountLayouts(oldProgram, newProgram, epicConfig);
       const intelligence = createUpgradeIntelligence(report);
-      const programName = report.findings[0]?.account || path.basename(resolvedNewPath);
-      printUpgradeReport(report, intelligence, { program: programName }, { skipTitle: startupShown });
-      console.log("");
+      const programName = compatibility.accounts[0]?.account || report.findings[0]?.account || path.basename(resolvedNewPath);
 
+      if (isJson) {
+        console.log(
+          JSON.stringify(
+            {
+              program: programName,
+              compatibility,
+              findings: report.findings,
+              severity: report.severity
+            },
+            null,
+            2
+          )
+        );
+        process.exit(compatibility.overall === "Blocked" ? 1 : 0);
+      }
+
+      // Lead with the compatibility verdict (the product), then keep the
+      // detailed layout findings below it as supporting evidence.
+      printCompatibilityReport(compatibility, { program: programName }, { skipTitle: startupShown });
+
+      if (report.findings.length) {
+        console.log(colors.gray(DIVIDER));
+        console.log(colors.white(colors.bold("LAYOUT FINDINGS (DETAIL)")));
+        console.log(colors.gray(DIVIDER));
+        console.log("");
+        printUpgradeReport(report, intelligence, { program: programName }, { skipTitle: true });
+        console.log("");
+      }
+
+      // Exit code. BLOCKED always fails CI (state corruption is non-negotiable),
+      // overriding fail_on_severity. Other outcomes respect the configured threshold.
       const severityOrder = ["SAFE", "MINOR", "WARNING", "MAJOR", "CRITICAL"];
       const thresholdIndex = severityOrder.indexOf(epicConfig.failOnSeverity);
       const reportSeverityIndex = severityOrder.indexOf(report.severity);
+      const severityFails =
+        thresholdIndex !== -1 && reportSeverityIndex !== -1 && reportSeverityIndex >= thresholdIndex;
+      const blocked = compatibility.overall === "Blocked";
+      const fails = blocked || severityFails;
 
       console.log(colors.gray(DIVIDER));
       console.log("");
-      if (thresholdIndex !== -1 && reportSeverityIndex !== -1 && reportSeverityIndex >= thresholdIndex) {
-        console.log(colors.critical(`✖ EPIC Guard Blocked: Upgrade severity is ${report.severity} (threshold: ${epicConfig.failOnSeverity}).`));
+      if (blocked) {
+        console.log(
+          colors.critical(`✖ EPIC Guard Blocked: deploying would corrupt existing on-chain accounts.`)
+        );
+      } else if (severityFails) {
+        console.log(
+          colors.critical(`✖ EPIC Guard Blocked: Upgrade severity is ${report.severity} (threshold: ${epicConfig.failOnSeverity}).`)
+        );
+      } else if (compatibility.overall === "Migration-Required") {
+        console.log(colors.warning(`▲ EPIC Guard: Upgrade is safe only after the migration above is performed.`));
       } else {
         console.log(colors.success(`✓ EPIC Guard Approved Upgrade.`));
       }
       console.log("");
       console.log(colors.dim(`Time: ${(Date.now() - startTime) / 1000} s`));
       console.log("");
-      
-      if (thresholdIndex !== -1 && reportSeverityIndex !== -1 && reportSeverityIndex >= thresholdIndex) {
-        process.exit(1);
-      } else {
-        process.exit(0);
-      }
+
+      process.exit(fails ? 1 : 0);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`epic check failed: ${message}`);
@@ -550,11 +594,9 @@ program
 
 program.configureHelp({
   formatHelp: (cmd, helper) => {
-    return `
-${colors.bold(colors.white("EPIC"))}
-${colors.dim("Security-first upgrade intelligence for Solana")}
-${colors.cyan("v" + CLI_VERSION)}
-
+    const noBannerFlag = !!cmd.opts().noBanner || process.argv.includes("--no-banner");
+    const header = getBannerString(noBannerFlag);
+    return `${header}
 ${colors.bold("Commands")}
   ${colors.white("audit".padEnd(14))} Run security rules against the repository.
   ${colors.white("doctor".padEnd(14))} Run diagnostics on the environment.

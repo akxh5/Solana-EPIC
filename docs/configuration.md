@@ -6,7 +6,7 @@ EPIC uses an `epic.toml` configuration file located at the root of your workspac
 
 ```toml
 [epic]
-fail_on_severity = "CRITICAL" # Valid options: "SAFE", "MINOR", "MAJOR", "CRITICAL"
+fail_on_severity = "CRITICAL" # Valid options: "SAFE", "MINOR", "WARNING", "MAJOR", "CRITICAL"
 
 [epic.rules]
 ignore = [

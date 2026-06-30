@@ -36,16 +36,27 @@ export type DiffReport = {
   findings: DiffFinding[];
 };
 
+// Parse both program versions once. Callers that need the raw AnalyzeResults
+// (e.g. to run the compatibility simulator alongside the layout diff) should
+// use this and avoid re-parsing.
+export async function analyzePrograms(
+  oldProgramDir: string,
+  newProgramDir: string,
+  cfg?: config.ResolvedEpicConfig
+): Promise<{ oldProgram: AnalyzeResult; newProgram: AnalyzeResult }> {
+  const [oldProgram, newProgram] = await Promise.all([
+    analyzeAnchorProject(oldProgramDir, cfg?.excludePaths),
+    analyzeAnchorProject(newProgramDir, cfg?.excludePaths)
+  ]);
+  return { oldProgram, newProgram };
+}
+
 export async function compareAnchorPrograms(
   oldProgramDir: string,
   newProgramDir: string,
   cfg?: config.ResolvedEpicConfig
 ): Promise<DiffReport> {
-  const [oldProgram, newProgram] = await Promise.all([
-    analyzeAnchorProject(oldProgramDir, cfg?.excludePaths),
-    analyzeAnchorProject(newProgramDir, cfg?.excludePaths)
-  ]);
-
+  const { oldProgram, newProgram } = await analyzePrograms(oldProgramDir, newProgramDir, cfg);
   return compareAccountLayouts(oldProgram, newProgram, cfg);
 }
 

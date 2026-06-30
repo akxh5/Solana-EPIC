@@ -55,6 +55,20 @@ const bannerSuppressed = (noBannerFlag: boolean): boolean => {
   return false;
 };
 
+export const getBannerString = (noBannerFlag: boolean = false): string => {
+  if (bannerSuppressed(noBannerFlag)) return "";
+
+  const lines = [""];
+  for (const row of EPIC_WORDMARK) {
+    lines.push("  " + colors.gold(row));
+  }
+  lines.push("");
+  lines.push("  " + colors.white(EPIC_SUBTITLE));
+  lines.push("  " + colors.gray(`v${CLI_VERSION}`));
+  lines.push("");
+  return lines.join("\n");
+};
+
 export const printBanner = (noBannerFlag: boolean = false) => {
   if (bannerPrinted) return;
   if (bannerSuppressed(noBannerFlag)) {
@@ -62,15 +76,7 @@ export const printBanner = (noBannerFlag: boolean = false) => {
     return;
   }
 
-  console.log("");
-  for (const row of EPIC_WORDMARK) {
-    console.log("  " + colors.gold(row));
-  }
-  console.log("");
-  console.log("  " + colors.white(EPIC_SUBTITLE));
-  console.log("  " + colors.gray(`v${CLI_VERSION}`));
-  console.log("");
-
+  console.log(getBannerString());
   bannerPrinted = true;
 };
 
@@ -444,6 +450,193 @@ export const printUpgradeReport = (
   });
 
   return overall;
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// Account Compatibility (check) — EPIC's signature output.
+// Answers: what changed, why it matters, what breaks, can I deploy, what next.
+// ───────────────────────────────────────────────────────────────────────────
+
+// Verdict pill keyed by compatibility status.
+const compatBadge = (status: string): string => {
+  switch (status) {
+    case "Blocked":
+      return chip("BLOCKED", "97", "41"); // white on red
+    case "Migration-Required":
+      return chip("MIGRATION", "30", "43"); // black on yellow
+    case "Compatible":
+    default:
+      return chip("SAFE", "30", "42"); // black on green
+  }
+};
+
+const compatPaint = (status: string) =>
+  status === "Blocked" ? colors.critical : status === "Migration-Required" ? colors.warning : colors.success;
+
+const STATUS_LABEL: Record<string, string> = {
+  Blocked: "Existing accounts would be corrupted",
+  "Migration-Required": "Existing accounts must be migrated first",
+  Compatible: "Existing accounts remain valid"
+};
+
+// A single fixed-width layout cell: "name  start–end".
+const layoutCell = (f: any | undefined, width = 22): string => {
+  if (!f) return "".padEnd(width);
+  const span = f.offset + f.byteSize - 1;
+  const range = f.byteSize <= 1 ? `${f.offset}` : `${f.offset}–${span}`;
+  const approx = f.offsetApproximate || f.dynamic ? "~" : "";
+  const text = `${f.name}  ${approx}${range}`;
+  return text.length >= width ? text.slice(0, width) : text.padEnd(width);
+};
+
+const rowsDiverge = (a: any | undefined, b: any | undefined): boolean => {
+  if (!a || !b) return true;
+  return a.name !== b.name || a.type !== b.type || a.offset !== b.offset;
+};
+
+// account: AccountCompatibility from diff-engine.
+export const printAccountCompatibility = (account: any) => {
+  const paint = compatPaint(account.status);
+
+  console.log(colors.gray(THIN));
+  console.log("");
+  console.log(
+    `${compatBadge(account.status)}  ${colors.white(account.account)}  ${colors.gray("·")}  ${paint(
+      STATUS_LABEL[account.status] || account.status
+    )}`
+  );
+  console.log("");
+
+  // Size line — concrete, not editorial.
+  const sizeText =
+    account.oldSize != null && account.newSize != null
+      ? `${account.oldSize} → ${account.newSize} bytes${
+          account.sizeDelta ? ` (${account.sizeDelta > 0 ? "+" : ""}${account.sizeDelta})` : ""
+        }`
+      : account.newSize != null
+        ? `${account.newSize} bytes (new)`
+        : `${account.oldSize} bytes (removed)`;
+  console.log(`${colors.dim("Size")}        ${colors.white(sizeText)}`);
+  console.log(`${colors.dim("Certainty")}   ${colors.white(account.certainty)}`);
+  if (typeof account.rentDeltaLamports === "number") {
+    const sol = (account.rentDeltaLamports / 1e9).toFixed(6);
+    console.log(
+      `${colors.dim("Rent")}        ${colors.white(`+${account.rentDeltaLamports.toLocaleString()} lamports`)} ${colors.gray(
+        `(~${sol} SOL per account)`
+      )}`
+    );
+  }
+  console.log("");
+
+  // WHY — the reasons this verdict was reached.
+  if (account.reasons?.length) {
+    console.log(colors.bold(colors.white("WHY")));
+    for (const reason of account.reasons) {
+      for (const line of wrap(`• ${reason}`)) console.log(colors.dim(line));
+    }
+    console.log("");
+  }
+
+  // Byte-level reasoning — the "I've never seen a tool do this" moment.
+  const br = account.byteReasoning;
+  if (br && (br.oldLayout?.length || br.newLayout?.length)) {
+    const rows = Math.max(br.oldLayout.length, br.newLayout.length);
+    console.log(`${colors.bold(colors.white("Old Layout"))}                    ${colors.bold(colors.white("New Layout"))}`);
+    for (let i = 0; i < rows; i++) {
+      const o = br.oldLayout[i];
+      const n = br.newLayout[i];
+      const diverged = rowsDiverge(o, n);
+      const left = diverged && o ? colors.gray(layoutCell(o)) : colors.dim(layoutCell(o));
+      const sep = diverged ? colors.gold(" → ") : colors.gray(" │ ");
+      const right = diverged && n ? paint(layoutCell(n)) : colors.dim(layoutCell(n));
+      console.log(`  ${left}${sep}${right}`);
+    }
+    console.log("");
+
+    if (br.explanations?.length) {
+      console.log(colors.bold(colors.white("WHAT BREAKS")));
+      for (const ex of br.explanations) {
+        for (const line of wrap(ex)) console.log(colors.warning(line));
+      }
+      console.log("");
+    }
+  }
+
+  // WHAT TO DO NEXT — the diff-conditioned plan.
+  if (account.upgradePlan?.length) {
+    console.log(colors.bold(colors.white("RECOMMENDED UPGRADE PLAN")));
+    account.upgradePlan.forEach((step: string, i: number) => {
+      const num = colors.gold(`${i + 1}.`);
+      const lines = wrap(step, 70);
+      console.log(`  ${num} ${paint(lines[0])}`);
+      for (const cont of lines.slice(1)) console.log(`     ${paint(cont)}`);
+    });
+    console.log("");
+  }
+
+  // Honesty: never bury the caveats.
+  if (account.caveats?.length) {
+    console.log(colors.bold(colors.gray("CAVEATS")));
+    for (const c of account.caveats) {
+      for (const line of wrap(`• ${c}`)) console.log(colors.dim(line));
+    }
+    console.log("");
+  }
+};
+
+// Full compatibility report header + verdict for `epic check`.
+// report: CompatibilityReport from diff-engine.
+export const printCompatibilityReport = (
+  report: { overall: string; accounts: any[]; assumptions: string[] },
+  meta: { program: string },
+  opts: { skipTitle?: boolean } = {}
+) => {
+  if (!opts.skipTitle) {
+    console.log(colors.gray(DIVIDER));
+    console.log(colors.white(colors.bold("EPIC ACCOUNT COMPATIBILITY")));
+    console.log(colors.gray(DIVIDER));
+    console.log("");
+  }
+
+  const counts = { Blocked: 0, "Migration-Required": 0, Compatible: 0 } as Record<string, number>;
+  for (const a of report.accounts) counts[a.status] = (counts[a.status] || 0) + 1;
+
+  console.log(`${colors.dim("Program")}        ${colors.white(meta.program)}`);
+  console.log(`${colors.dim("Accounts")}       ${colors.white(String(report.accounts.length))}`);
+  console.log(
+    `${colors.dim("Verdict")}        ${compatBadge(report.overall)}  ${compatPaint(report.overall)(
+      STATUS_LABEL[report.overall] || report.overall
+    )}`
+  );
+  if (report.accounts.length) {
+    console.log(
+      `${colors.dim("Breakdown")}      ${colors.critical(`${counts.Blocked} blocked`)}  ${colors.gray("·")}  ${colors.warning(
+        `${counts["Migration-Required"]} migration`
+      )}  ${colors.gray("·")}  ${colors.success(`${counts.Compatible} safe`)}`
+    );
+  }
+  console.log("");
+
+  if (!report.accounts.length) {
+    block(
+      "WHAT HAPPENED",
+      `No state accounts were found to compare for \`${meta.program}\`. There is nothing to migrate.`,
+      colors.dim
+    );
+  } else {
+    for (const account of report.accounts) printAccountCompatibility(account);
+  }
+
+  // Standing assumptions — rendered once, never per account.
+  if (report.assumptions?.length) {
+    console.log(colors.gray(THIN));
+    console.log("");
+    console.log(colors.bold(colors.gray("ANALYSIS ASSUMPTIONS")));
+    for (const a of report.assumptions) {
+      for (const line of wrap(`• ${a}`)) console.log(colors.dim(line));
+    }
+    console.log("");
+  }
 };
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -25,14 +25,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run EPIC Upgrade Guard
-        uses: ./src-new/packages/epic-action
+      - name: Run EPIC Upgrade Intelligence
+        uses: solana-epic/github-action@v0.1.0-beta.3
         with:
           old_path: src-old
           new_path: src-new
+          format: sarif
 
-      - name: Upload EPIC JSON Report
-        uses: actions/upload-artifact@v4
+      - name: Upload Security Findings
+        uses: github/code-scanning-upload-aurora@v2
         with:
-          name: epic-report
-          path: epic-report.json
+          sarif_file: epic-report.sarif
